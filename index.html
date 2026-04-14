@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dashboard MAV – Descuento de Documentos</title>
+  <title>Dashboard MAV – Cheques y Pagarés</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -110,7 +110,7 @@
     .leg-dot  { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 
     .r-tri { grid-template-columns: 1fr 1fr 1fr; }
-    /* Instrumentos PYME */
+    /* Resumen por Instrumento */
     .instr-toggle { display:flex; gap:4px; }
     .instr-btn { padding:5px 14px; border:1px solid var(--border); border-radius:6px;
                  cursor:pointer; font-size:12px; font-weight:600;
@@ -137,7 +137,7 @@
 <!-- Header -->
 <header class="header">
   <div>
-    <h1>MAV – Descuento de Documentos</h1>
+    <h1>Cheques y Pagarés</h1>
     <p id="periodLabel">Mercado Argentino de Valores</p>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
@@ -210,11 +210,11 @@
     </div>
   </div>
 
-  <!-- Instrumentos PYME -->
+  <!-- Resumen por Instrumento -->
   <div class="row">
     <div class="card card-full">
       <div class="card-hdr">
-        <span class="card-ttl">Instrumentos PYME</span>
+        <span class="card-ttl">Resumen por Instrumento</span>
         <div class="instr-toggle">
           <button class="instr-btn on" data-inst="ALL"  onclick="setInstr(this)">Todos</button>
           <button class="instr-btn"    data-inst="CPD"  onclick="setInstr(this)">Cheques</button>
@@ -268,7 +268,7 @@
   <div class="row">
     <div class="card card-full">
       <div class="card-hdr">
-        <span class="card-ttl">Tasas Promedio por Tramo · por Segmento</span>
+        <span class="card-ttl">Tasas Promedio por Tramo</span>
         <span class="card-sub">Tasa ponderada por monto — eje X = plazo del documento</span>
       </div>
       <div style="position:relative;height:300px"><canvas id="cTasaTramo"></canvas></div>
@@ -286,13 +286,20 @@
     <div class="card">
       <div class="card-hdr">
         <span class="card-ttl">Tasas y Montos por Empresa</span>
-        <span class="card-sub">Top 20 por monto operado</span>
+        <span class="card-sub" id="tblSub">Top 20 por monto operado</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <div id="catChips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        <input id="empresaSearch" type="text" placeholder="Buscar empresa…"
+          style="margin-left:auto;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
+                 background:var(--card);color:var(--fg);font-family:inherit;font-size:12px;min-width:160px;outline:none"
+          oninput="tblSearch=this.value.toLowerCase();updTable(filteredData)">
       </div>
       <div class="tbl-wrap">
         <table>
           <thead><tr>
             <th>#</th><th>Empresa</th><th>Categoría</th>
-            <th style="text-align:right">Monto (M)</th>
+            <th style="text-align:right">Monto</th>
             <th style="text-align:right">Tasa Pond.</th>
           </tr></thead>
           <tbody id="tEmp"></tbody>
@@ -361,6 +368,9 @@ let rawData = [];
 let charts  = {};
 const F = { moneda:'ALL', segmento:'ALL', tipo:'ALL', desde:'', hasta:'' };
 let F_inst  = 'ALL'; // instrumento toggle independiente
+let tblCat  = 'ALL'; // tabla empresas: filtro por categoría
+let tblSearch = '';  // tabla empresas: búsqueda por nombre
+let filteredData = []; // última vista filtrada (para actualizar tabla sin recargar todo)
 
 // ── Data loader ───────────────────────────────────────────────────────────────
 async function loadAndRender() {
@@ -538,9 +548,10 @@ const MON_PALETTE  = { '$':'#E32D91', 'DOL':'#1A49C8', 'U$D':'#1A49C8', 'U$S':'#
 
 // ── Apply all ─────────────────────────────────────────────────────────────────
 function applyFilters() {
-  const d = filtered();
-  updKPIs(d); updTramo(d); updTemporal(d); updMontos(d); updTable(d); updTreemap(d);
-  updPies(d); updTasaTramo(d); updInstrPyme(d);
+  filteredData = filtered();
+  updKPIs(filteredData); updTramo(filteredData); updTemporal(filteredData); updMontos(filteredData);
+  updTable(filteredData); updTreemap(filteredData);
+  updPies(filteredData); updTasaTramo(filteredData); updInstrPyme(filteredData);
 }
 
 function setInstr(btn) {
@@ -649,10 +660,12 @@ function updMontos(d) {
   const sorted = Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
   document.getElementById('montSub').textContent = 'Total: '+fmtM(sorted.reduce((s,[,v])=>s+v,0));
   if (charts.montos) charts.montos.destroy();
+  // Labels as formatted dates (category axis — avoids blank gaps for weekends/holidays)
+  const labels = sorted.map(([dateStr])=>fmtDate(dateStr));
   charts.montos = new Chart(document.getElementById('cMontos'), {
     type:'bar',
     data:{
-      labels: sorted.map(([d])=>d),
+      labels,
       datasets:[{label:'Monto diario', data:sorted.map(([,v])=>+(v/1e6).toFixed(2)),
                  backgroundColor:'rgba(26,73,200,.45)',borderColor:'#1A49C8',
                  borderWidth:1,borderRadius:3}]
@@ -660,10 +673,11 @@ function updMontos(d) {
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false},
-               tooltip:{callbacks:{title:ctx=>fmtDate(ctx[0].label),label:ctx=>' '+ctx.raw.toLocaleString('es-AR')+' M'}}},
+               tooltip:{callbacks:{label:ctx=>' '+ctx.raw.toLocaleString('es-AR')+' M'}}},
       scales:{
-        x:{type:'time',time:{unit:'week',displayFormats:{week:'d MMM'},tooltipFormat:'dd/MM/yyyy'},
-           grid:{display:false},ticks:{font:{size:10}}},
+        x:{type:'category',
+           grid:{display:false},
+           ticks:{font:{size:10}, maxRotation:45, autoSkip:true, maxTicksLimit:20}},
         y:{grid:{color:'#f3f4f6'},
            ticks:{callback:v=>v>=1000?(v/1000).toFixed(0)+' B':v+' M',font:{size:10}},
            title:{display:true,text:'Millones',font:{size:11}}}
@@ -674,23 +688,51 @@ function updMontos(d) {
 
 // ── Tabla empresas ────────────────────────────────────────────────────────────
 function updTable(d) {
+  // Aggregate by empresa
   const m = {};
   d.forEach(r=>{
     if(!r.empresa) return;
     if(!m[r.empresa]) m[r.empresa]={sM:0,sTM:0,cat:r.categoria};
     m[r.empresa].sM+=r.monto; m[r.empresa].sTM+=r.tasa*r.monto;
   });
-  document.getElementById('tEmp').innerHTML =
-    Object.entries(m).sort((a,b)=>b[1].sM-a[1].sM).slice(0,20).map(([emp,v],i)=>{
-      const cat=v.cat||'Sin clasificar', col=CAT_COLORS[cat]||'#94a3b8';
-      return `<tr>
-        <td style="color:var(--muted);width:24px">${i+1}</td>
-        <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${emp}">${emp}</td>
-        <td><span class="bcat" style="background:${col}22;color:${col}">${cat}</span></td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${(v.sM/1e6).toFixed(0)}</td>
-        <td style="text-align:right;color:#E32D91;font-weight:700">${(v.sTM/v.sM).toFixed(2)}%</td>
-      </tr>`;
+
+  // Build category chip list from data (sorted by monto)
+  const allCats = ['ALL',...Object.values(m)
+    .reduce((s,v)=>{ s.add(v.cat||'Sin clasificar'); return s; }, new Set())];
+  const chipsEl = document.getElementById('catChips');
+  if (chipsEl) {
+    chipsEl.innerHTML = allCats.map(c=>{
+      const col = c==='ALL' ? '#6B7280' : (CAT_COLORS[c]||'#94a3b8');
+      const on  = tblCat===c;
+      return `<button onclick="tblCat='${c}';updTable(filteredData)"
+        style="padding:3px 10px;border-radius:20px;border:1px solid ${col};cursor:pointer;font-family:inherit;font-size:11px;
+               background:${on?col:'transparent'};color:${on?'#fff':col};transition:all .15s">
+        ${c==='ALL'?'Todas':c}</button>`;
     }).join('');
+  }
+
+  // Apply category + search filters
+  let rows = Object.entries(m);
+  if (tblCat !== 'ALL') rows = rows.filter(([,v])=>(v.cat||'Sin clasificar')===tblCat);
+  if (tblSearch) rows = rows.filter(([emp])=>emp.toLowerCase().includes(tblSearch));
+
+  // Sort by monto desc, show top 20
+  const top = rows.sort((a,b)=>b[1].sM-a[1].sM).slice(0,20);
+
+  // Update subtitle
+  const subEl = document.getElementById('tblSub');
+  if (subEl) subEl.textContent = `${top.length} empresa${top.length!==1?'s':''} · ordenadas por monto`;
+
+  document.getElementById('tEmp').innerHTML = top.map(([emp,v],i)=>{
+    const cat=v.cat||'Sin clasificar', col=CAT_COLORS[cat]||'#94a3b8';
+    return `<tr>
+      <td style="color:var(--muted);width:24px">${i+1}</td>
+      <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${emp}">${emp}</td>
+      <td><span class="bcat" style="background:${col}22;color:${col}">${cat}</span></td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${fmtM(v.sM)}</td>
+      <td style="text-align:right;color:#E32D91;font-weight:700">${(v.sTM/v.sM).toFixed(2)}%</td>
+    </tr>`;
+  }).join('');
 }
 
 // ── Treemap ───────────────────────────────────────────────────────────────────
@@ -809,6 +851,7 @@ function updTasaTramo(d) {
       const v = m[seg]?.[t];
       return v && v.sM > 0 ? +(v.sTM / v.sM).toFixed(3) : null;
     }),
+    montoData: tramos.map(t => m[seg]?.[t]?.sM || 0),
     borderColor: SEG_PALETTE[i % SEG_PALETTE.length],
     backgroundColor: 'transparent',
     pointBackgroundColor: SEG_PALETTE[i % SEG_PALETTE.length],
@@ -827,7 +870,11 @@ function updTasaTramo(d) {
         legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12, padding: 12, usePointStyle: true } },
         tooltip: {
           callbacks: {
-            label: ctx => ctx.raw !== null ? ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%` : null
+            label: ctx => {
+              if (ctx.raw === null) return null;
+              const monto = ctx.dataset.montoData?.[ctx.dataIndex] ?? 0;
+              return ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%  ·  ${fmtM(monto)}`;
+            }
           }
         }
       },
@@ -843,7 +890,7 @@ function updTasaTramo(d) {
   });
 }
 
-// ── Instrumentos PYME ─────────────────────────────────────────────────────────
+// ── Resumen por Instrumento ─────────────────────────────────────────────────────────
 const SEG_ORDER_INSTR = ['Avalado', 'No Garantizado', 'Garantizado'];
 
 function instrMatch(tipo) {
