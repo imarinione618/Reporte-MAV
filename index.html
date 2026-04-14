@@ -288,12 +288,21 @@
         <span class="card-ttl">Tasas y Montos por Empresa</span>
         <span class="card-sub" id="tblSub">Top 20 por monto operado</span>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-        <div id="catChips" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-        <input id="empresaSearch" type="text" placeholder="Buscar empresa…"
-          style="margin-left:auto;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
-                 background:var(--card);color:var(--fg);font-family:inherit;font-size:12px;min-width:160px;outline:none"
-          oninput="tblSearch=this.value.toLowerCase();updTable(filteredData)">
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:11px;color:var(--muted);min-width:60px">Categoría</span>
+          <div id="catChips" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:11px;color:var(--muted);min-width:60px">Tramo</span>
+          <div id="tramoChips" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end">
+          <input id="empresaSearch" type="text" placeholder="Buscar empresa…"
+            style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;
+                   background:var(--card);color:var(--fg);font-family:inherit;font-size:12px;min-width:180px;outline:none"
+            oninput="tblSearch=this.value.toLowerCase();updTable(filteredData)">
+        </div>
       </div>
       <div class="tbl-wrap">
         <table>
@@ -361,15 +370,16 @@ const CAT_COLORS = {
   'Sector público': '#B2B2B2',
   'Sin clasificar': '#6B7280'
 };
-const MON_LABELS = {'$':'$ ARS','DOL':'Dólares','U$D':'USD','U$S':'USD (U$S)'};
+const MON_LABELS = {'$':'$ ARS','DOL':'Hard Dollar','U$D':'Dólar A3500','U$S':'Dólar BNA','USD':'Hard Dollar'};
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let rawData = [];
 let charts  = {};
 const F = { moneda:'ALL', segmento:'ALL', tipo:'ALL', desde:'', hasta:'' };
 let F_inst  = 'ALL'; // instrumento toggle independiente
-let tblCat  = 'ALL'; // tabla empresas: filtro por categoría
-let tblSearch = '';  // tabla empresas: búsqueda por nombre
+let tblCat    = 'ALL'; // tabla empresas: filtro por categoría
+let tblTramo  = 'ALL'; // tabla empresas: filtro por tramo
+let tblSearch = '';    // tabla empresas: búsqueda por nombre
 let filteredData = []; // última vista filtrada (para actualizar tabla sin recargar todo)
 
 // ── Data loader ───────────────────────────────────────────────────────────────
@@ -688,17 +698,19 @@ function updMontos(d) {
 
 // ── Tabla empresas ────────────────────────────────────────────────────────────
 function updTable(d) {
+  // Pre-filter by tramo before aggregating (tramo lives at row level)
+  const src = tblTramo === 'ALL' ? d : d.filter(r => (r.tramo||'') === tblTramo);
+
   // Aggregate by empresa
   const m = {};
-  d.forEach(r=>{
+  src.forEach(r=>{
     if(!r.empresa) return;
     if(!m[r.empresa]) m[r.empresa]={sM:0,sTM:0,cat:r.categoria};
     m[r.empresa].sM+=r.monto; m[r.empresa].sTM+=r.tasa*r.monto;
   });
 
-  // Build category chip list from data (sorted by monto)
-  const allCats = ['ALL',...Object.values(m)
-    .reduce((s,v)=>{ s.add(v.cat||'Sin clasificar'); return s; }, new Set())];
+  // ── Categoría chips (built from full d, not src, so options don't disappear) ──
+  const allCats = ['ALL',...d.reduce((s,r)=>{ s.add(r.categoria||'Sin clasificar'); return s;}, new Set())];
   const chipsEl = document.getElementById('catChips');
   if (chipsEl) {
     chipsEl.innerHTML = allCats.map(c=>{
@@ -708,6 +720,20 @@ function updTable(d) {
         style="padding:3px 10px;border-radius:20px;border:1px solid ${col};cursor:pointer;font-family:inherit;font-size:11px;
                background:${on?col:'transparent'};color:${on?'#fff':col};transition:all .15s">
         ${c==='ALL'?'Todas':c}</button>`;
+    }).join('');
+  }
+
+  // ── Tramo chips (built from full d so options don't disappear) ──
+  const allTramos = ['ALL',...[...d.reduce((s,r)=>{ if(r.tramo) s.add(r.tramo); return s;}, new Set())]
+    .sort((a,b)=>parseInt(a)-parseInt(b))];
+  const tramoEl = document.getElementById('tramoChips');
+  if (tramoEl) {
+    tramoEl.innerHTML = allTramos.map(t=>{
+      const on = tblTramo===t;
+      return `<button onclick="tblTramo='${t}';updTable(filteredData)"
+        style="padding:3px 10px;border-radius:20px;border:1px solid #1A49C8;cursor:pointer;font-family:inherit;font-size:11px;
+               background:${on?'#1A49C8':'transparent'};color:${on?'#fff':'#1A49C8'};transition:all .15s">
+        ${t==='ALL'?'Todos':t+' días'}</button>`;
     }).join('');
   }
 
