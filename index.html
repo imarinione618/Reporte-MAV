@@ -328,8 +328,12 @@ Chart.defaults.plugins.tooltip.padding         = 10;
 // ── Config ────────────────────────────────────────────────────────────────────
 const SHEET_ID = '11r7oJ9mm4-IUHszK6LkTAFZOzFUe0RZBEWgP7ZzwvvE';
 const GID      = '220459711';
-// gviz CSV — sin redirect, CORS ok desde GitHub Pages
-const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID}`;
+// URL de "Publicar en la web" — sin auth, CORS ok desde GitHub Pages
+const PUB_ID   = '2PACX-1vTwkGoYISKklkkzXek9Rr_buY6B-85SWYee03zbLdAIRjwONAFtNOm1NW24ixVU-l0AJL1A3UXyMWvk';
+const CSV_URLS = [
+  `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?gid=${GID}&single=true&output=csv`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${GID}`,
+];
 
 // Paleta one618 — base: #E32D91 (rosa), #1A49C8 (azul), #B2B2B2 (gris)
 const TRAMO_COLORS = {
@@ -358,19 +362,25 @@ let charts  = {};
 const F = { moneda:'ALL', segmento:'ALL', tipo:'ALL', desde:'', hasta:'' };
 let F_inst  = 'ALL'; // instrumento toggle independiente
 
-// ── Data loader (fetch CSV — igual que Monitor BCRA) ─────────────────────────
+// ── Data loader ───────────────────────────────────────────────────────────────
 async function loadAndRender() {
   showLoading('Cargando datos desde Google Sheets…');
-  try {
-    const res = await fetch(CSV_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    showLoading('Procesando datos…');
-    rawData = parseCSV(await res.text());
-    if (!rawData.length) throw new Error('Sin datos válidos en el sheet.');
-    initFilters(); applyFilters(); hideLoading();
-  } catch(e) {
-    showError(e.message);
+  let lastErr = '';
+  for (const url of CSV_URLS) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showLoading('Procesando datos…');
+      rawData = parseCSV(await res.text());
+      if (!rawData.length) throw new Error('Sin filas válidas en el CSV.');
+      initFilters(); applyFilters(); hideLoading();
+      return; // éxito
+    } catch(e) {
+      lastErr = e.message;
+    }
   }
+  // Ambas URLs fallaron — mostrar error real
+  showError(`Error: ${lastErr}<br><small style="opacity:.6">URLs probadas: export?format=csv y gviz/tq?tqx=out:csv</small>`);
 }
 
 // ── CSV parser ────────────────────────────────────────────────────────────────
@@ -931,9 +941,7 @@ function showError(msg) {
   document.getElementById('loadMsg').innerHTML=`
     <div class="err-box">
       <h3>⚠ Error al cargar datos</h3>
-      <p>${msg}<br><br>
-         Verificá que el sheet esté compartido como<br>
-         <strong>"Cualquier persona con el enlace puede ver"</strong>.</p>
+      <p>${msg}</p>
       <button class="btn-pri" onclick="loadAndRender()">Reintentar</button>
     </div>`;
 }
