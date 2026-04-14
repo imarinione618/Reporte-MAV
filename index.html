@@ -328,12 +328,8 @@ Chart.defaults.plugins.tooltip.padding         = 10;
 // ── Config ────────────────────────────────────────────────────────────────────
 const SHEET_ID = '11r7oJ9mm4-IUHszK6LkTAFZOzFUe0RZBEWgP7ZzwvvE';
 const GID      = '220459711';
-const CSV_URL    = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID}`;
-const SHEET_NAME = 'subastas_historico_modelo';
-// Intentamos con nombre de pestaña (más robusto que gid desde file://)
-const JSONP_URL  = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out%3Ajson%3BresponseHandler%3A_mavData&sheet=${encodeURIComponent(SHEET_NAME)}&headers=1`;
-// Fallback: gid sin TQ
-const JSONP_URL2 = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out%3Ajson%3BresponseHandler%3A_mavData2&gid=${GID}&headers=1`;
+// gviz CSV — sin redirect, CORS ok desde GitHub Pages
+const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID}`;
 
 // Paleta one618 — base: #E32D91 (rosa), #1A49C8 (azul), #B2B2B2 (gris)
 const TRAMO_COLORS = {
@@ -362,113 +358,19 @@ let charts  = {};
 const F = { moneda:'ALL', segmento:'ALL', tipo:'ALL', desde:'', hasta:'' };
 let F_inst  = 'ALL'; // instrumento toggle independiente
 
-// ── Data loader: fetch CSV → fallback JSONP ───────────────────────────────────
+// ── Data loader (fetch CSV — igual que Monitor BCRA) ─────────────────────────
 async function loadAndRender() {
   showLoading('Cargando datos desde Google Sheets…');
   try {
-    // Intento 1: fetch (funciona desde GitHub Pages / HTTPS)
     const res = await fetch(CSV_URL);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
     showLoading('Procesando datos…');
-    rawData = parseCSV(text);
-    if (!rawData.length) throw new Error('Sin datos válidos.');
+    rawData = parseCSV(await res.text());
+    if (!rawData.length) throw new Error('Sin datos válidos en el sheet.');
     initFilters(); applyFilters(); hideLoading();
   } catch(e) {
-    // Fallback automático: JSONP via script tag (funciona desde file://)
-    showLoading('Conectando vía JSONP…');
-    loadViaJSONP();
+    showError(e.message);
   }
-}
-
-function loadViaJSONP() {
-  tryJSONP(JSONP_URL, '_mavData', (ok) => {
-    if (!ok) tryJSONP(JSONP_URL2, '_mavData2', (ok2) => {
-      if (!ok2) showError(
-        'No se pudieron cargar los datos.<br><br>' +
-        '<b>¿Estás abriendo el archivo desde tu computadora (file://)?</b><br>' +
-        'Google Sheets bloquea las solicitudes directas desde archivos locales.<br><br>' +
-        'Soluciones:<br>' +
-        '① Subí el archivo a <b>GitHub Pages</b> (imarinione618.github.io)<br>' +
-        '② Usá un servidor local: <code>npx serve .</code> y abrí localhost<br>' +
-        '③ En Chrome: abrí con la flag <code>--allow-file-access-from-files</code>'
-      );
-    });
-  });
-}
-
-function tryJSONP(url, cbName, onDone) {
-  const t = setTimeout(() => { window[cbName] = null; onDone(false); }, 15000);
-  window[cbName] = function(resp) {
-    clearTimeout(t);
-    window[cbName] = null;
-    try {
-      if (resp.status !== 'ok') { onDone(false); return; }
-      const parsed = parseGviz(resp.table);
-      if (!parsed.length) { onDone(false); return; }
-      rawData = parsed;
-      initFilters(); applyFilters(); hideLoading();
-      onDone(true);
-    } catch(e) { onDone(false); }
-  };
-  const s = document.createElement('script');
-  s.src = url;
-  s.onerror = () => { clearTimeout(t); onDone(false); };
-  document.head.appendChild(s);
-}
-
-// ── Gviz table parser ─────────────────────────────────────────────────────────
-// Sin TQ → gviz devuelve TODAS las columnas del sheet
-// Índices absolutos (0-based): A=0 B=1 C=2 … O=14 R=17 S=18 Y=24 AA=26 AB=27
-// JSONP evalúa new Date(y,m,d) → fechaRaw es un objeto Date nativo, no un string
-const GV = { fecha:1, segmento:2, tipo:6, tasaC:14, moneda:17, monto:18,
-             empresa:24, categoria:26, tramo:27 };
-
-function parseGviz(table) {
-  const rows = table.rows || [];
-  const result = [];
-
-  rows.forEach(row => {
-    const c = row.c || [];
-    const fechaRaw = c[GV.fecha]?.v;
-    if (fechaRaw == null) return;
-
-    let date;
-    if (fechaRaw instanceof Date) {
-      // Caso normal JSONP: objeto Date nativo evaluado por el browser
-      date = fechaRaw.getFullYear() + '-' +
-             String(fechaRaw.getMonth() + 1).padStart(2,'0') + '-' +
-             String(fechaRaw.getDate()).padStart(2,'0');
-    } else {
-      const ds = String(fechaRaw);
-      if (ds.includes('/')) {
-        const p = ds.split('/');
-        date = p[2].padStart(4,'0') + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
-      } else if (ds.startsWith('Date(')) {
-        const p = ds.slice(5,-1).split(',').map(Number);
-        date = `${p[0]}-${String(p[1]+1).padStart(2,'0')}-${String(p[2]).padStart(2,'0')}`;
-      } else if (/^\d{4}-\d{2}-\d{2}$/.test(ds)) {
-        date = ds; // ya en formato ISO
-      } else return;
-    }
-
-    const tasa  = parseFloat(String(c[GV.tasaC]?.v  ?? '').replace(',','.'));
-    const monto = parseFloat(String(c[GV.monto]?.v   ?? '').replace(',','.'));
-    if (isNaN(tasa) || isNaN(monto) || monto <= 0) return;
-
-    result.push({
-      date,
-      segmento:  String(c[GV.segmento]?.v  ?? '').trim(),
-      tipo:      String(c[GV.tipo]?.v       ?? '').trim(),
-      tasa,
-      moneda:    String(c[GV.moneda]?.v     ?? '').trim(),
-      monto,
-      empresa:   String(c[GV.empresa]?.v    ?? '').trim(),
-      categoria: String(c[GV.categoria]?.v  ?? '').trim(),
-      tramo:     String(c[GV.tramo]?.v      ?? '').trim(),
-    });
-  });
-  return result;
 }
 
 // ── CSV parser ────────────────────────────────────────────────────────────────
