@@ -76,13 +76,22 @@
     /* ── Main ── */
     .main { padding: 20px 24px; max-width: 1700px; margin: 0 auto; }
 
-    .kpis { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 20px; }
+    .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
     .kpi  { background: var(--card); border-radius: var(--radius); padding: 16px 18px;
             box-shadow: var(--shadow); border-left: 4px solid var(--pri); }
     .kpi-lbl { font-size: 11px; font-weight: 700; text-transform: uppercase;
                 letter-spacing: .5px; color: var(--muted); }
-    .kpi-val { font-size: 26px; font-weight: 700; margin: 4px 0 2px; color: var(--text); }
+    .kpi-val { font-size: 26px; font-weight: 700; margin: 4px 0 6px; color: var(--text); }
     .kpi-sub { font-size: 11px; color: var(--muted); }
+    .kpi-tags { display:flex; gap:5px; flex-wrap:wrap; margin-top:6px; }
+    .kpi-tag  { padding:2px 9px; border-radius:20px; font-size:11px; font-weight:600; }
+    .kpi-split { display:flex; gap:0; }
+    .kpi-half  { flex:1; }
+    .kpi-half + .kpi-half { border-left:1px solid var(--border); padding-left:18px; margin-left:4px; }
+    .kpi-val-sm { font-size:20px; font-weight:700; margin:4px 0 2px; color:var(--text); }
+    /* Filter highlight when active */
+    .fg.active .fl  { color: var(--pri); }
+    .fsel.active    { border-color: var(--pri); background: var(--pri-l); color: var(--pri); font-weight:600; }
 
     .row { display: grid; gap: 16px; margin-bottom: 20px; }
     .r2  { grid-template-columns: 2fr 3fr; }
@@ -177,19 +186,24 @@
 <main class="main">
   <div class="kpis">
     <div class="kpi" style="border-left-color:#E32D91">
-      <div class="kpi-lbl">Tasa Ponderada Global</div>
+      <div class="kpi-lbl">Tasa Ponderada</div>
       <div class="kpi-val" id="kTasa">—</div>
-      <div class="kpi-sub">TASA C. · ponderada por monto</div>
+      <div class="kpi-tags" id="kTasaTags"></div>
     </div>
-    <div class="kpi" style="border-left-color:#7B1FAE">
-      <div class="kpi-lbl">Días con Operaciones</div>
-      <div class="kpi-val" id="kDias">—</div>
-      <div class="kpi-sub" id="kDiaSub">—</div>
-    </div>
-    <div class="kpi" style="border-left-color:#B2B2B2">
-      <div class="kpi-lbl">Operaciones Totales</div>
-      <div class="kpi-val" id="kOps">—</div>
-      <div class="kpi-sub" id="kOpsSub">—</div>
+    <div class="kpi" style="border-left-color:#1A49C8">
+      <div class="kpi-lbl" style="margin-bottom:8px">Actividad del Período</div>
+      <div class="kpi-split">
+        <div class="kpi-half">
+          <div class="kpi-val-sm" id="kOps">—</div>
+          <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px">Operaciones</div>
+          <div class="kpi-sub" id="kOpsSub" style="margin-top:3px">—</div>
+        </div>
+        <div class="kpi-half">
+          <div class="kpi-val-sm" id="kDias">—</div>
+          <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px">Días hábiles</div>
+          <div class="kpi-sub" id="kDiaSub" style="margin-top:3px">—</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -227,7 +241,6 @@
           <thead><tr>
             <th style="min-width:180px">Segmento</th>
             <th style="text-align:right">Monto Nominal</th>
-            <th style="text-align:right">Monto Pesificado</th>
             <th style="text-align:center">Rango Mayor Volumen</th>
             <th style="text-align:right">TEA</th>
             <th style="text-align:right">TEM</th>
@@ -403,6 +416,22 @@ async function loadAndRender() {
   showError(`Error: ${lastErr}<br><small style="opacity:.6">URLs probadas: export?format=csv y gviz/tq?tqx=out:csv</small>`);
 }
 
+// ── Número en formato argentino (1.234.567,89) o estándar (1234567.89) ────────
+function parseArg(raw) {
+  let s = (raw || '').replace(/"/g, '').trim();
+  if (!s) return NaN;
+  // Si tiene coma: formato AR → puntos = miles, coma = decimal
+  if (s.includes(',')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else {
+    // Sin coma: si hay más de un punto son miles (1.234.567), eliminarlos
+    const dots = (s.match(/\./g) || []).length;
+    if (dots > 1) s = s.replace(/\./g, '');
+    // si hay un solo punto podría ser decimal estándar → dejarlo
+  }
+  return parseFloat(s);
+}
+
 // ── CSV parser ────────────────────────────────────────────────────────────────
 function parseCSVRow(line) {
   const result = []; let cur = '', inQ = false;
@@ -455,8 +484,8 @@ function parseCSV(text) {
     if (parts.length !== 3) continue;
     const date = parts[2].padStart(4,'0') + '-' + parts[1].padStart(2,'0') + '-' + parts[0].padStart(2,'0');
 
-    const tasa  = parseFloat((r[C.tasaC] || '').replace(/"/g,'').replace(',','.'));
-    const monto = parseFloat((r[C.monto] || '').replace(/"/g,'').replace(',','.'));
+    const tasa  = parseArg(r[C.tasaC]);
+    const monto = parseArg(r[C.monto]);
     if (isNaN(tasa) || isNaN(monto) || monto <= 0) continue;
 
     result.push({
@@ -482,12 +511,15 @@ function initFilters() {
   const segmentos = uniq(rawData.map(r => r.segmento));
   const tipos     = uniq(rawData.map(r => r.tipo));
 
-  // Moneda buttons
+  // Moneda buttons — sin opción "Todas", pre-selecciona la primera moneda disponible
   const wrap = document.getElementById('monWrap');
-  wrap.innerHTML = '<button class="mon-btn on" data-v="ALL" onclick="setMon(this)">Todas</button>';
+  wrap.innerHTML = '';
+  const defaultMon = monedas.includes('$') ? '$' : monedas[0];
+  if (F.moneda === 'ALL') F.moneda = defaultMon; // forzar selección
   monedas.forEach(m => {
     const b = document.createElement('button');
-    b.className = 'mon-btn'; b.dataset.v = m;
+    b.className = 'mon-btn' + (m === F.moneda ? ' on' : '');
+    b.dataset.v = m;
     b.textContent = MON_LABELS[m] || m;
     b.onclick = function(){ setMon(this); };
     wrap.appendChild(b);
@@ -529,11 +561,14 @@ function setMon(btn) {
   btn.classList.add('on'); F.moneda = btn.dataset.v; applyFilters();
 }
 function resetFilters() {
-  F.moneda = 'ALL'; F.segmento = 'ALL'; F.tipo = 'ALL';
+  const monedas = [...new Set(rawData.map(r=>r.moneda))].filter(Boolean).sort();
+  const defaultMon = monedas.includes('$') ? '$' : monedas[0];
+  F.moneda = defaultMon; F.segmento = 'ALL'; F.tipo = 'ALL';
   const dates = [...new Set(rawData.map(r=>r.date))].filter(Boolean).sort();
   F.desde = dates[0]; F.hasta = dates[dates.length-1];
-  document.querySelectorAll('.mon-btn').forEach(b => b.classList.remove('on'));
-  document.querySelector('.mon-btn[data-v="ALL"]').classList.add('on');
+  document.querySelectorAll('.mon-btn').forEach(b =>
+    b.classList.toggle('on', b.dataset.v === defaultMon)
+  );
   document.getElementById('fSeg').value   = 'ALL';
   document.getElementById('fTipo').value  = 'ALL';
   document.getElementById('fDesde').value = F.desde;
@@ -578,11 +613,40 @@ function updKPIs(d) {
   const tasa  = sumM > 0 ? sumTM/sumM : NaN;
   const dias  = new Set(d.map(r=>r.date)).size;
   const ops   = d.length;
-  document.getElementById('kTasa').textContent     = isNaN(tasa) ? '—' : tasa.toFixed(2)+'%';
-  document.getElementById('kDias').textContent     = dias;
-  document.getElementById('kDiaSub').textContent   = fmtDate(F.desde)+' – '+fmtDate(F.hasta);
-  document.getElementById('kOps').textContent      = ops.toLocaleString('es-AR');
-  document.getElementById('kOpsSub').textContent   = ops>0 ? fmtM(sumM/ops)+' promedio / op.' : '—';
+
+  document.getElementById('kTasa').textContent   = isNaN(tasa) ? '—' : tasa.toFixed(2)+'%';
+  document.getElementById('kDias').textContent   = dias;
+  document.getElementById('kDiaSub').textContent = fmtDate(F.desde)+' – '+fmtDate(F.hasta);
+  document.getElementById('kOps').textContent    = ops.toLocaleString('es-AR');
+  document.getElementById('kOpsSub').textContent = ops>0 ? fmtM(sumM/ops)+' prom / op.' : '—';
+
+  // Tags de contexto bajo la tasa
+  const monLabel  = F.moneda   === 'ALL' ? 'Todas las monedas' : (MON_LABELS[F.moneda]  || F.moneda);
+  const segLabel  = F.segmento === 'ALL' ? 'Todos los segmentos' : F.segmento;
+  const tipoLabel = F.tipo     === 'ALL' ? 'Todos los instrumentos' : F.tipo;
+  const tags = [
+    { text: monLabel,  color: F.moneda   === 'ALL' ? '#B2B2B2' : '#E32D91' },
+    { text: segLabel,  color: F.segmento === 'ALL' ? '#B2B2B2' : '#1A49C8' },
+    { text: tipoLabel, color: F.tipo     === 'ALL' ? '#B2B2B2' : '#7B1FAE' },
+  ];
+  document.getElementById('kTasaTags').innerHTML = tags.map(t =>
+    `<span class="kpi-tag" style="background:${t.color}18;color:${t.color};border:1px solid ${t.color}44">${t.text}</span>`
+  ).join('');
+
+  // Highlight active filters
+  updFilterHighlight();
+}
+
+function updFilterHighlight() {
+  // Segmento select
+  const fSeg  = document.getElementById('fSeg');
+  const fTipo = document.getElementById('fTipo');
+  fSeg?.classList.toggle('active',  F.segmento !== 'ALL');
+  fTipo?.classList.toggle('active', F.tipo     !== 'ALL');
+  // fg wrappers
+  fSeg?.closest('.fg')?.classList.toggle('active',  F.segmento !== 'ALL');
+  fTipo?.closest('.fg')?.classList.toggle('active', F.tipo     !== 'ALL');
+  document.getElementById('monWrap')?.closest('.fg')?.classList.toggle('active', F.moneda !== 'ALL');
 }
 
 // ── Tramo bar ─────────────────────────────────────────────────────────────────
@@ -960,7 +1024,7 @@ function updInstrPyme(d) {
     const subrows = bySeg[seg].sort((a, b) => b.sM - a.sM);
     const segTotal = subrows.reduce((s, r) => s + r.sM, 0);
 
-    html += `<tr class="seg-hdr"><td colspan="7">
+    html += `<tr class="seg-hdr"><td colspan="6">
       ${seg}<span>${fmtM(segTotal)}</span>
     </td></tr>`;
 
@@ -975,7 +1039,6 @@ function updInstrPyme(d) {
       html += `<tr>
         <td style="padding-left:22px;color:var(--muted);font-size:12px">${monLabel}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtN(row.sM)}</td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)">${fmtN(row.sM)}</td>
         <td style="text-align:center;font-weight:600">${majorTramo} días</td>
         <td style="text-align:right;color:#E32D91;font-weight:700">${tea.toFixed(2)}%</td>
         <td style="text-align:right;font-weight:600">${tem.toFixed(2)}%</td>
@@ -984,7 +1047,7 @@ function updInstrPyme(d) {
     });
   });
 
-  if (!html) html = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">Sin datos para los filtros seleccionados</td></tr>';
+  if (!html) html = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Sin datos para los filtros seleccionados</td></tr>';
   document.getElementById('tInstr').innerHTML = html;
 }
 
