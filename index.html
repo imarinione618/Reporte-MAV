@@ -647,6 +647,12 @@ const CAT_COLORS = {
   'Sin clasificar': '#6B7280'
 };
 const MON_LABELS = {'$':'$ ARS','DOL':'Hard Dollar','U$D':'Dólar A3500','U$S':'Dólar BNA','USD':'Hard Dollar'};
+// Renombra segmentos "sin calificación" para distinguirlos del calificado
+const SEG_LABELS = {
+  'No Garantizado':  'No Garantizado No Calificado',
+  'Garantizado':     'Garantizado No Calificado',
+};
+const segLbl = s => SEG_LABELS[s] || s || '—';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let rawData = [];
@@ -790,7 +796,7 @@ function initFilters() {
   // Segmento
   const fSeg = document.getElementById('fSeg');
   fSeg.innerHTML = '<option value="ALL">Todos</option>';
-  segmentos.forEach(s => fSeg.add(new Option(s, s)));
+  segmentos.forEach(s => fSeg.add(new Option(segLbl(s), s)));
   fSeg.onchange = () => { F.segmento = fSeg.value; applyFilters(); };
 
   // Tipo
@@ -897,7 +903,7 @@ function updKPIs(d) {
   const allSel    = F.monedas.length >= allMon.length;
   const monLabel  = allSel ? 'Todas las monedas'
                    : F.monedas.map(m => MON_LABELS[m] || m).join(' + ');
-  const segLabel  = F.segmento === 'ALL' ? 'Todos los segmentos' : F.segmento;
+  const segLabel  = F.segmento === 'ALL' ? 'Todos los segmentos' : segLbl(F.segmento);
   const tipoLabel = F.tipo     === 'ALL' ? 'Todos los instrumentos' : F.tipo;
   const tags = [
     { text: monLabel,  color: allSel             ? '#B2B2B2' : '#E32D91' },
@@ -1186,7 +1192,7 @@ function updPies(d) {
   d.forEach(r => { if (r.segmento) mSeg[r.segmento] = (mSeg[r.segmento] || 0) + r.monto; });
   const segsSorted = Object.entries(mSeg).sort((a, b) => b[1] - a[1]);
   makePie('cPieSeg',
-    segsSorted.map(([k]) => k),
+    segsSorted.map(([k]) => segLbl(k)),
     segsSorted.map(([, v]) => v),
     segsSorted.map((_, i) => SEG_PALETTE[i % SEG_PALETTE.length])
   );
@@ -1212,7 +1218,7 @@ function updTasaTramo(d) {
   const segmentos = [...segSet].sort();
 
   const datasets = segmentos.map((seg, i) => ({
-    label: seg,
+    label: segLbl(seg),
     data: tramos.map(t => {
       const v = m[seg]?.[t];
       return v && v.sM > 0 ? +(v.sTM / v.sM).toFixed(3) : null;
@@ -1301,7 +1307,7 @@ function updInstrPyme(d) {
     const segTotal = subrows.reduce((s, r) => s + r.sM, 0);
 
     html += `<tr class="seg-hdr"><td colspan="6">
-      ${seg}<span>${fmtM(segTotal)}</span>
+      ${segLbl(seg)}<span>${fmtM(segTotal)}</span>
     </td></tr>`;
 
     subrows.forEach(row => {
@@ -1501,7 +1507,7 @@ function rtInitFilters() {
 
   const fSeg = document.getElementById('rtFSeg');
   fSeg.innerHTML = '<option value="ALL">Todos</option>';
-  segmentos.forEach(s => fSeg.add(new Option(s, s)));
+  segmentos.forEach(s => fSeg.add(new Option(segLbl(s), s)));
   fSeg.onchange = () => { RT_F.segmento = fSeg.value; rtApplyFilters(); };
 
   const fTipo = document.getElementById('rtFTipo');
@@ -1576,7 +1582,7 @@ function rtUpdKPIs(d) {
   const allMon = [...new Set(rtRawData.map(r=>r.moneda))].filter(Boolean);
   const allSel = RT_F.monedas.length >= allMon.length;
   const monLabel  = allSel ? 'Todas las monedas' : RT_F.monedas.map(m=>MON_LABELS[m]||m).join(' + ');
-  const segLabel  = RT_F.segmento === 'ALL' ? 'Todos los segmentos' : RT_F.segmento;
+  const segLabel  = RT_F.segmento === 'ALL' ? 'Todos los segmentos' : segLbl(RT_F.segmento);
   const tipoLabel = RT_F.tipo     === 'ALL' ? 'Todos los instrumentos' : RT_F.tipo;
   const tags = [
     { text: monLabel,  color: allSel             ? '#B2B2B2' : '#E32D91' },
@@ -1780,7 +1786,7 @@ function rtUpdPies(d) {
     monsSorted.map(([k,v])=>[MON_LABELS[k]||k,v]),
     monsSorted.map(([k])=>MON_PALETTE[k]||'#B2B2B2'));
   const segsSorted  = Object.entries(mSeg).sort((a,b)=>b[1]-a[1]);
-  mk('rtCPieSeg','pie_rtSeg', segsSorted, segsSorted.map((_,i)=>SEG_PALETTE[i%SEG_PALETTE.length]));
+  mk('rtCPieSeg','pie_rtSeg', segsSorted.map(([k,v])=>[segLbl(k),v]), segsSorted.map((_,i)=>SEG_PALETTE[i%SEG_PALETTE.length]));
 }
 
 // ── RT Tabla operaciones ──────────────────────────────────────────────────────
@@ -1814,7 +1820,7 @@ function rtUpdTable(d) {
       <td style="font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.empresa}">${r.empresa||'—'}</td>
       <td><span class="bcat" style="background:${col}22;color:${col}">${cat}</span></td>
       <td style="color:var(--muted)">${r.tramo||'—'} días</td>
-      <td style="color:var(--muted)">${r.segmento||'—'}</td>
+      <td style="color:var(--muted)">${segLbl(r.segmento)||'—'}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${fmtM(r.monto)}</td>
       <td style="text-align:right;color:#E32D91;font-weight:700">${r.tasa.toFixed(2)}%</td>
     </tr>`;
@@ -1854,8 +1860,10 @@ function bubbleColorPalette(keys) {
 // ── Categoría chips ───────────────────────────────────────────────────────────
 // "_NG_TOTAL" = virtual: filtra segmento que contiene "No Garantizado"
 const BUBBLE_VIRTUAL_CATS = [
+  { id:'_G_TOTAL',  label:'Garantizado Total',    color:'#1A49C8',
+    match: r => { const s=(r.segmento||'').toLowerCase(); return s.includes('garantizado') && !s.includes('no garantizado'); } },
   { id:'_NG_TOTAL', label:'No Garantizado Total', color:'#0ea5e9',
-    match: r => (r.segmento||'').toLowerCase().includes('no garantizado') }
+    match: r => (r.segmento||'').toLowerCase().includes('no garantizado') },
 ];
 
 function bubbleRenderCatChips(d) {
@@ -1997,7 +2005,7 @@ function rtUpdBubble(d) {
   const getKey = r => {
     if (bubbleColorBy==='empresa')   return r.empresa || 'Sin empresa';
     if (bubbleColorBy==='categoria') return r.categoria || 'Sin clasificar';
-    return r.segmento || 'Sin segmento';
+    return segLbl(r.segmento) || 'Sin segmento';
   };
 
   const agg = {};
@@ -2097,5 +2105,4 @@ function rtUpdBubble(d) {
 </script>
 </body>
 </html>
-
 
