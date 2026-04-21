@@ -796,6 +796,12 @@ function initFilters() {
   // Segmento
   const fSeg = document.getElementById('fSeg');
   fSeg.innerHTML = '<option value="ALL">Todos</option>';
+  // Opciones virtuales (totales)
+  if (segmentos.some(s => s.toLowerCase().includes('garantizado') && !s.toLowerCase().includes('no')))
+    fSeg.add(new Option('── Garantizado Total', '_G_TOTAL'));
+  if (segmentos.some(s => s.toLowerCase().includes('no garantizado')))
+    fSeg.add(new Option('── No Garantizado Total', '_NG_TOTAL'));
+  // Opciones individuales
   segmentos.forEach(s => fSeg.add(new Option(segLbl(s), s)));
   fSeg.onchange = () => { F.segmento = fSeg.value; applyFilters(); };
 
@@ -853,11 +859,17 @@ function resetFilters() {
   document.getElementById('fHasta').value = F.hasta;
   applyFilters();
 }
+function segMatch(seg, filterVal) {
+  if (filterVal === 'ALL') return true;
+  if (filterVal === '_G_TOTAL')  return (seg||'').toLowerCase().includes('garantizado') && !(seg||'').toLowerCase().includes('no garantizado');
+  if (filterVal === '_NG_TOTAL') return (seg||'').toLowerCase().includes('no garantizado');
+  return seg === filterVal;
+}
 function filtered() {
   return rawData.filter(r => {
     if (F.monedas.length && !F.monedas.includes(r.moneda)) return false;
-    if (F.segmento !== 'ALL' && r.segmento !== F.segmento) return false;
-    if (F.tipo     !== 'ALL' && r.tipo     !== F.tipo)     return false;
+    if (!segMatch(r.segmento, F.segmento)) return false;
+    if (F.tipo !== 'ALL' && r.tipo !== F.tipo) return false;
     if (F.desde && r.date < F.desde) return false;
     if (F.hasta && r.date > F.hasta) return false;
     return true;
@@ -903,7 +915,10 @@ function updKPIs(d) {
   const allSel    = F.monedas.length >= allMon.length;
   const monLabel  = allSel ? 'Todas las monedas'
                    : F.monedas.map(m => MON_LABELS[m] || m).join(' + ');
-  const segLabel  = F.segmento === 'ALL' ? 'Todos los segmentos' : segLbl(F.segmento);
+  const segLabel  = F.segmento === 'ALL' ? 'Todos los segmentos'
+    : F.segmento === '_G_TOTAL'  ? 'Garantizado Total'
+    : F.segmento === '_NG_TOTAL' ? 'No Garantizado Total'
+    : segLbl(F.segmento);
   const tipoLabel = F.tipo     === 'ALL' ? 'Todos los instrumentos' : F.tipo;
   const tags = [
     { text: monLabel,  color: allSel             ? '#B2B2B2' : '#E32D91' },
@@ -1507,6 +1522,10 @@ function rtInitFilters() {
 
   const fSeg = document.getElementById('rtFSeg');
   fSeg.innerHTML = '<option value="ALL">Todos</option>';
+  if (segmentos.some(s => s.toLowerCase().includes('garantizado') && !s.toLowerCase().includes('no')))
+    fSeg.add(new Option('── Garantizado Total', '_G_TOTAL'));
+  if (segmentos.some(s => s.toLowerCase().includes('no garantizado')))
+    fSeg.add(new Option('── No Garantizado Total', '_NG_TOTAL'));
   segmentos.forEach(s => fSeg.add(new Option(segLbl(s), s)));
   fSeg.onchange = () => { RT_F.segmento = fSeg.value; rtApplyFilters(); };
 
@@ -1542,8 +1561,8 @@ function rtResetFilters() {
 function rtFiltered() {
   return rtRawData.filter(r => {
     if (RT_F.monedas.length && !RT_F.monedas.includes(r.moneda)) return false;
-    if (RT_F.segmento !== 'ALL' && r.segmento !== RT_F.segmento) return false;
-    if (RT_F.tipo     !== 'ALL' && r.tipo     !== RT_F.tipo)     return false;
+    if (!segMatch(r.segmento, RT_F.segmento)) return false;
+    if (RT_F.tipo !== 'ALL' && r.tipo !== RT_F.tipo) return false;
     return true;
   });
 }
@@ -2105,4 +2124,5 @@ function rtUpdBubble(d) {
 </script>
 </body>
 </html>
+
 
