@@ -119,6 +119,25 @@
     .leg-dot  { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 
     .r-tri { grid-template-columns: 1fr 1fr 1fr; }
+
+    /* ── Tab nav ── */
+    .tab-nav { background: var(--card); border-bottom: 1px solid var(--border);
+               padding: 0 24px; display: flex; gap: 0; }
+    .tab-btn { padding: 12px 20px; border: none; background: none; cursor: pointer;
+               font-family: inherit; font-size: 13px; font-weight: 600;
+               color: var(--muted); border-bottom: 3px solid transparent;
+               transition: all .15s; margin-bottom: -1px; }
+    .tab-btn.on { color: var(--pri); border-bottom-color: var(--pri); }
+    .tab-btn:hover:not(.on) { color: var(--text); }
+    .tab-section { display: none; }
+    .tab-section.on { display: block; }
+
+    /* ── RT live badge ── */
+    .live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+                background: #22c55e; margin-right: 5px; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .rt-hora { font-size: 28px; font-weight: 700; color: var(--text); }
+    .rt-fecha-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
     /* Resumen por Instrumento */
     .instr-toggle { display:flex; gap:4px; }
     .instr-btn { padding:5px 14px; border:1px solid var(--border); border-radius:6px;
@@ -154,6 +173,15 @@
     <button class="btn-reload" onclick="loadAndRender()">↺ Actualizar</button>
   </div>
 </header>
+
+<!-- Tab nav -->
+<nav class="tab-nav">
+  <button class="tab-btn on" onclick="switchTab('hist')">Histórico</button>
+  <button class="tab-btn"    onclick="switchTab('rt')"><span class="live-dot" style="vertical-align:middle"></span>Tiempo Real</button>
+</nav>
+
+<!-- ══ SECCIÓN HISTÓRICO ══ -->
+<div id="sect-hist" class="tab-section on">
 
 <!-- Filters -->
 <div class="filters">
@@ -341,6 +369,155 @@
     </div>
   </div>
 </main>
+
+</div><!-- /sect-hist -->
+
+<!-- ══ SECCIÓN TIEMPO REAL ══ -->
+<div id="sect-rt" class="tab-section">
+
+  <!-- Filters RT -->
+  <div class="filters">
+    <div class="fg">
+      <span class="fl">Moneda</span>
+      <div class="mon-wrap" id="rtMonWrap"></div>
+    </div>
+    <div class="fg">
+      <span class="fl">Segmento</span>
+      <select class="fsel" id="rtFSeg"><option value="ALL">Todos</option></select>
+    </div>
+    <div class="fg">
+      <span class="fl">Tipo instrumento</span>
+      <select class="fsel" id="rtFTipo"><option value="ALL">Todos</option></select>
+    </div>
+    <button class="btn-rst" onclick="rtResetFilters()">↺ Resetear</button>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+      <span class="badge" id="rtUpdBadge">—</span>
+      <button class="btn-reload" onclick="loadRT()">↺ Actualizar</button>
+    </div>
+  </div>
+
+  <main class="main">
+
+    <!-- KPIs RT -->
+    <div class="kpis" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="kpi" style="border-left-color:#E32D91">
+        <div class="kpi-lbl">Tasa Ponderada</div>
+        <div class="kpi-val" id="rtKTasa">—</div>
+        <div class="kpi-tags" id="rtKTasaTags"></div>
+      </div>
+      <div class="kpi" style="border-left-color:#1A49C8">
+        <div class="kpi-lbl" style="margin-bottom:6px">Actividad del Día</div>
+        <div class="kpi-split">
+          <div class="kpi-half">
+            <div class="kpi-val-sm" id="rtKOps">—</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px">Operaciones</div>
+            <div class="kpi-sub" id="rtKMonto" style="margin-top:3px">—</div>
+          </div>
+          <div class="kpi-half">
+            <div class="kpi-val-sm" id="rtKMon">—</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.4px">Monto total</div>
+            <div class="kpi-sub" id="rtKFecha" style="margin-top:3px">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="kpi" style="border-left-color:#22c55e">
+        <div class="kpi-lbl"><span class="live-dot"></span>Última Operación</div>
+        <div class="rt-hora" id="rtKHora">—</div>
+        <div class="rt-fecha-lbl" id="rtKFechaHora">—</div>
+      </div>
+    </div>
+
+    <!-- Evolución intraday: tasas por hora -->
+    <div class="row r2">
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-ttl">Tasa Ponderada por Tramo</span>
+          <span class="card-sub">TNA % · ponderada por monto</span>
+        </div>
+        <div style="position:relative;height:280px"><canvas id="rtCTramo"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-ttl">Evolución Intraday de Tasas</span>
+          <span class="card-sub">Tasa ponderada acumulada por hora · T.MIN.</span>
+        </div>
+        <div style="position:relative;height:280px"><canvas id="rtCIntraday"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Montos por hora + Resumen instrumento -->
+    <div class="row r2">
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-ttl">Monto por Hora</span>
+          <span class="card-sub" id="rtMontSub">—</span>
+        </div>
+        <div style="position:relative;height:260px"><canvas id="rtCMontos"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-ttl">Tasas Promedio por Tramo</span>
+          <span class="card-sub">Tasa ponderada por monto · plazo del documento</span>
+        </div>
+        <div style="position:relative;height:260px"><canvas id="rtCTasaTramo"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Pies -->
+    <div class="row r-tri">
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-ttl">Por Instrumento</span>
+          <span class="card-sub">% monto del día</span>
+        </div>
+        <div class="pie-wrap"><canvas id="rtCPieInst"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-ttl">Por Moneda</span>
+          <span class="card-sub">% monto del día</span>
+        </div>
+        <div class="pie-wrap"><canvas id="rtCPieMon"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">
+          <span class="card-ttl">Por Segmento</span>
+          <span class="card-sub">% monto del día</span>
+        </div>
+        <div class="pie-wrap"><canvas id="rtCPieSeg"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Tabla operaciones del día -->
+    <div class="row">
+      <div class="card card-full">
+        <div class="card-hdr">
+          <span class="card-ttl">Operaciones del Día</span>
+          <span class="card-sub" id="rtTblSub">—</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+          <div id="rtCatChips" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+          <input id="rtEmpresaSearch" type="text" placeholder="Buscar empresa…"
+            style="margin-left:auto;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
+                   background:var(--card);color:var(--fg);font-family:inherit;font-size:12px;min-width:180px;outline:none"
+            oninput="rtTblSearch=this.value.toLowerCase();rtUpdTable(rtFilteredData)">
+        </div>
+        <div class="tbl-wrap" style="max-height:400px">
+          <table>
+            <thead><tr>
+              <th>#</th><th>Hora</th><th>Empresa</th><th>Categoría</th>
+              <th>Tramo</th><th>Segmento</th>
+              <th style="text-align:right">Monto</th>
+              <th style="text-align:right">Tasa</th>
+            </tr></thead>
+            <tbody id="rtTEmp"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div><!-- /sect-rt -->
 
 <script>
 // ── Chart.js defaults (estilo one618) ────────────────────────────────────────
@@ -1098,6 +1275,453 @@ function showError(msg) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 loadAndRender();
 window.addEventListener('resize', ()=>{ if(rawData.length) updTreemap(filtered()); });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TIEMPO REAL
+// ══════════════════════════════════════════════════════════════════════════════
+
+const RT_GID = '405041137';
+const RT_CSV_URLS = [
+  `https://docs.google.com/spreadsheets/d/e/${PUB_ID}/pub?gid=${RT_GID}&single=true&output=csv`,
+  `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${RT_GID}`,
+];
+
+let rtRawData    = [];
+let rtCharts     = {};
+let rtFilteredData = [];
+let rtTblSearch  = '';
+let rtTblCat     = 'ALL';
+const RT_F = { monedas: [], segmento: 'ALL', tipo: 'ALL' };
+let rtAutoRefresh = null;
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) =>
+    b.classList.toggle('on', (i===0 && tab==='hist') || (i===1 && tab==='rt'))
+  );
+  document.getElementById('sect-hist').classList.toggle('on', tab==='hist');
+  document.getElementById('sect-rt').classList.toggle('on', tab==='rt');
+  if (tab==='rt' && !rtRawData.length) loadRT();
+  if (tab==='rt' && !rtAutoRefresh) {
+    rtAutoRefresh = setInterval(loadRT, 5 * 60 * 1000); // refresh c/5 min
+  }
+  if (tab==='hist' && rtAutoRefresh) {
+    clearInterval(rtAutoRefresh); rtAutoRefresh = null;
+  }
+}
+
+// ── RT Data loader ────────────────────────────────────────────────────────────
+async function loadRT() {
+  showLoading('Cargando datos en tiempo real…');
+  let lastErr = '';
+  for (const url of RT_CSV_URLS) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      showLoading('Procesando…');
+      rtRawData = rtParseCSV(await res.text());
+      if (!rtRawData.length) throw new Error('Sin filas válidas.');
+      rtInitFilters();
+      rtApplyFilters();
+      hideLoading();
+      document.getElementById('rtUpdBadge').textContent =
+        'Actualizado ' + new Date().toLocaleString('es-AR',
+          {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      return;
+    } catch(e) { lastErr = e.message; }
+  }
+  showError(`Error tiempo real: ${lastErr}`);
+}
+
+// ── RT CSV parser ─────────────────────────────────────────────────────────────
+function rtParseCSV(text) {
+  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  if (lines.length < 2) return [];
+  const headerLine = lines[0].replace(/^\uFEFF/, '');
+  const headers = parseCSVRow(headerLine).map(h => h.trim().replace(/"/g,''));
+  const idx = {};
+  headers.forEach((h,i) => idx[h] = i);
+
+  const C = {
+    fecha:    idx['FEC.SUB.']           ?? 1,
+    hora:     idx['T.MIN.']             ?? 10,
+    segmento: idx['SEGMENTO']           ?? 2,
+    tipo:     idx['TIPO INSTRUMENTO']   ?? 6,
+    tasaC:    idx['TASA C.']            ?? 14,
+    moneda:   idx['MONEDA']             ?? 17,
+    monto:    idx['MONTO']              ?? 18,
+    empresa:  idx['NOMBRE RESPONSABLE'] ?? 24,
+    categoria:idx['CATEGORIA']          ?? 26,
+    tramo:    idx['TRAMO']              ?? 27,
+  };
+
+  const result = [];
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const r = parseCSVRow(line);
+    const fechaRaw = (r[C.fecha] || '').replace(/"/g,'').trim();
+    if (!fechaRaw) continue;
+    const parts = fechaRaw.split('/');
+    if (parts.length !== 3) continue;
+    const date = parts[2].padStart(4,'0')+'-'+parts[1].padStart(2,'0')+'-'+parts[0].padStart(2,'0');
+    const tasa  = parseArg(r[C.tasaC]);
+    const monto = parseArg(r[C.monto]);
+    if (isNaN(tasa) || isNaN(monto) || monto <= 0) continue;
+    const horaRaw = (r[C.hora] || '').replace(/"/g,'').trim();
+    result.push({
+      date,
+      hora:      horaRaw,
+      segmento:  (r[C.segmento]  || '').replace(/"/g,'').trim(),
+      tipo:      (r[C.tipo]      || '').replace(/"/g,'').trim(),
+      tasa, monto,
+      moneda:    (r[C.moneda]    || '').replace(/"/g,'').trim(),
+      empresa:   (r[C.empresa]   || '').replace(/"/g,'').trim(),
+      categoria: (r[C.categoria] || '').replace(/"/g,'').trim(),
+      tramo:     (r[C.tramo]     || '').replace(/"/g,'').trim(),
+    });
+  }
+  return result;
+}
+
+// ── RT Filters ────────────────────────────────────────────────────────────────
+function rtInitFilters() {
+  const uniq = arr => [...new Set(arr)].filter(Boolean).sort();
+  const monedas   = uniq(rtRawData.map(r => r.moneda));
+  const segmentos = uniq(rtRawData.map(r => r.segmento));
+  const tipos     = uniq(rtRawData.map(r => r.tipo));
+
+  const wrap = document.getElementById('rtMonWrap');
+  wrap.innerHTML = '';
+  if (!RT_F.monedas.length) RT_F.monedas = [monedas.includes('$') ? '$' : monedas[0]];
+  monedas.forEach(m => {
+    const b = document.createElement('button');
+    b.className = 'mon-btn' + (RT_F.monedas.includes(m) ? ' on' : '');
+    b.dataset.v = m; b.textContent = MON_LABELS[m] || m;
+    b.onclick = function(){ rtSetMon(this); };
+    wrap.appendChild(b);
+  });
+
+  const fSeg = document.getElementById('rtFSeg');
+  fSeg.innerHTML = '<option value="ALL">Todos</option>';
+  segmentos.forEach(s => fSeg.add(new Option(s, s)));
+  fSeg.onchange = () => { RT_F.segmento = fSeg.value; rtApplyFilters(); };
+
+  const fTipo = document.getElementById('rtFTipo');
+  fTipo.innerHTML = '<option value="ALL">Todos</option>';
+  tipos.forEach(t => fTipo.add(new Option(t, t)));
+  fTipo.onchange = () => { RT_F.tipo = fTipo.value; rtApplyFilters(); };
+}
+
+function rtSetMon(btn) {
+  const v = btn.dataset.v;
+  const idx = RT_F.monedas.indexOf(v);
+  if (idx >= 0) { if (RT_F.monedas.length > 1) RT_F.monedas.splice(idx,1); }
+  else RT_F.monedas.push(v);
+  document.querySelectorAll('#rtMonWrap .mon-btn').forEach(b =>
+    b.classList.toggle('on', RT_F.monedas.includes(b.dataset.v))
+  );
+  rtApplyFilters();
+}
+
+function rtResetFilters() {
+  const monedas = [...new Set(rtRawData.map(r=>r.moneda))].filter(Boolean).sort();
+  RT_F.monedas = [monedas.includes('$') ? '$' : monedas[0]];
+  RT_F.segmento = 'ALL'; RT_F.tipo = 'ALL';
+  document.querySelectorAll('#rtMonWrap .mon-btn').forEach(b =>
+    b.classList.toggle('on', RT_F.monedas.includes(b.dataset.v))
+  );
+  document.getElementById('rtFSeg').value  = 'ALL';
+  document.getElementById('rtFTipo').value = 'ALL';
+  rtApplyFilters();
+}
+
+function rtFiltered() {
+  return rtRawData.filter(r => {
+    if (RT_F.monedas.length && !RT_F.monedas.includes(r.moneda)) return false;
+    if (RT_F.segmento !== 'ALL' && r.segmento !== RT_F.segmento) return false;
+    if (RT_F.tipo     !== 'ALL' && r.tipo     !== RT_F.tipo)     return false;
+    return true;
+  });
+}
+
+function rtApplyFilters() {
+  rtFilteredData = rtFiltered();
+  rtUpdKPIs(rtFilteredData);
+  rtUpdTramo(rtFilteredData);
+  rtUpdIntraday(rtFilteredData);
+  rtUpdMontos(rtFilteredData);
+  rtUpdTasaTramo(rtFilteredData);
+  rtUpdPies(rtFilteredData);
+  rtUpdTable(rtFilteredData);
+}
+
+// ── RT KPIs ───────────────────────────────────────────────────────────────────
+function rtUpdKPIs(d) {
+  const sumM  = d.reduce((s,r) => s+r.monto, 0);
+  const sumTM = d.reduce((s,r) => s+r.tasa*r.monto, 0);
+  const tasa  = sumM > 0 ? sumTM/sumM : NaN;
+  document.getElementById('rtKTasa').textContent = isNaN(tasa) ? '—' : tasa.toFixed(2)+'%';
+  document.getElementById('rtKOps').textContent  = d.length.toLocaleString('es-AR');
+  document.getElementById('rtKMonto').textContent = fmtM(sumM);
+  document.getElementById('rtKMon').textContent  = fmtM(sumM);
+  // fecha del día
+  const fechas = [...new Set(d.map(r=>r.date))].sort();
+  document.getElementById('rtKFecha').textContent = fechas.length ? fmtDate(fechas[fechas.length-1]) : '—';
+  // última operación (hora más alta)
+  const horas = d.map(r=>r.hora).filter(Boolean).sort();
+  const lastHora = horas.length ? horas[horas.length-1] : '—';
+  document.getElementById('rtKHora').textContent = lastHora;
+  document.getElementById('rtKFechaHora').textContent =
+    fechas.length ? 'al ' + fmtDate(fechas[fechas.length-1]) : '—';
+  // context tags
+  const allMon = [...new Set(rtRawData.map(r=>r.moneda))].filter(Boolean);
+  const allSel = RT_F.monedas.length >= allMon.length;
+  const monLabel  = allSel ? 'Todas las monedas' : RT_F.monedas.map(m=>MON_LABELS[m]||m).join(' + ');
+  const segLabel  = RT_F.segmento === 'ALL' ? 'Todos los segmentos' : RT_F.segmento;
+  const tipoLabel = RT_F.tipo     === 'ALL' ? 'Todos los instrumentos' : RT_F.tipo;
+  const tags = [
+    { text: monLabel,  color: allSel             ? '#B2B2B2' : '#E32D91' },
+    { text: segLabel,  color: RT_F.segmento==='ALL' ? '#B2B2B2' : '#1A49C8' },
+    { text: tipoLabel, color: RT_F.tipo==='ALL'     ? '#B2B2B2' : '#7B1FAE' },
+  ];
+  document.getElementById('rtKTasaTags').innerHTML = tags.map(t=>
+    `<span class="kpi-tag" style="background:${t.color}18;color:${t.color};border:1px solid ${t.color}44">${t.text}</span>`
+  ).join('');
+}
+
+// ── RT Tasa por Tramo (barras horizontales) ───────────────────────────────────
+function rtUpdTramo(d) {
+  const m = {};
+  d.forEach(r => {
+    if (!r.tramo) return;
+    if (!m[r.tramo]) m[r.tramo] = { sM:0, sTM:0 };
+    m[r.tramo].sM  += r.monto;
+    m[r.tramo].sTM += r.tasa * r.monto;
+  });
+  const sorted = Object.entries(m).sort((a,b) => parseInt(a[0])-parseInt(b[0]));
+  if (rtCharts.tramo) rtCharts.tramo.destroy();
+  rtCharts.tramo = new Chart(document.getElementById('rtCTramo'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([t]) => t+' días'),
+      datasets: [{
+        label: 'Tasa pond.',
+        data: sorted.map(([,v]) => v.sM>0 ? +(v.sTM/v.sM).toFixed(3) : null),
+        backgroundColor: sorted.map(([t]) => TRAMO_COLORS[t] || '#B2B2B2'),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false},
+        tooltip:{callbacks:{label: ctx => ` ${ctx.raw?.toFixed(2)}%  ·  ${fmtM(sorted[ctx.dataIndex][1].sM)}`}} },
+      scales: {
+        x: { ticks:{callback:v=>v+'%',font:{size:10}}, grid:{color:'#f3f4f6'} },
+        y: { grid:{display:false}, ticks:{font:{size:10}} }
+      }
+    }
+  });
+}
+
+// ── RT Intraday: tasa ponderada acumulada por hora ────────────────────────────
+function rtUpdIntraday(d) {
+  // agrupar por hora (HH:MM → HH)
+  const m = {};
+  d.forEach(r => {
+    if (!r.hora) return;
+    const h = r.hora.slice(0,5); // HH:MM
+    if (!m[h]) m[h] = { sM:0, sTM:0, ops:0 };
+    m[h].sM  += r.monto;
+    m[h].sTM += r.tasa * r.monto;
+    m[h].ops++;
+  });
+  const sorted = Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
+  if (rtCharts.intraday) rtCharts.intraday.destroy();
+  rtCharts.intraday = new Chart(document.getElementById('rtCIntraday'), {
+    type: 'line',
+    data: {
+      labels: sorted.map(([h])=>h),
+      datasets: [{
+        label: 'Tasa pond.',
+        data: sorted.map(([,v]) => v.sM>0 ? +(v.sTM/v.sM).toFixed(3) : null),
+        borderColor: '#E32D91', backgroundColor: 'rgba(227,45,145,.08)',
+        borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 6,
+        tension: 0.3, fill: true, spanGaps: false,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false},
+        tooltip:{callbacks:{label: ctx => ` ${ctx.raw?.toFixed(2)}%`}} },
+      scales: {
+        x: { type:'category', grid:{display:false}, ticks:{font:{size:10}} },
+        y: { grid:{color:'#f3f4f6'}, ticks:{callback:v=>v+'%',font:{size:10}} }
+      }
+    }
+  });
+}
+
+// ── RT Monto por Hora ─────────────────────────────────────────────────────────
+function rtUpdMontos(d) {
+  const m = {};
+  d.forEach(r => {
+    if (!r.hora) return;
+    const h = r.hora.slice(0,5);
+    m[h] = (m[h]||0) + r.monto;
+  });
+  const sorted = Object.entries(m).sort((a,b)=>a[0].localeCompare(b[0]));
+  const total = sorted.reduce((s,[,v])=>s+v,0);
+  document.getElementById('rtMontSub').textContent = 'Total: '+fmtM(total);
+  if (rtCharts.montos) rtCharts.montos.destroy();
+  rtCharts.montos = new Chart(document.getElementById('rtCMontos'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([h])=>h),
+      datasets: [{
+        label: 'Monto',
+        data: sorted.map(([,v]) => +(v/1e6).toFixed(2)),
+        backgroundColor: 'rgba(26,73,200,.45)', borderColor:'#1A49C8',
+        borderWidth:1, borderRadius:3
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.raw.toLocaleString('es-AR')} M`}} },
+      scales: {
+        x: { type:'category', grid:{display:false}, ticks:{font:{size:10}} },
+        y: { grid:{color:'#f3f4f6'},
+          ticks:{callback:v=>v>=1000?(v/1000).toFixed(0)+' B':v+' M',font:{size:10}},
+          title:{display:true,text:'Millones',font:{size:10}} }
+      }
+    }
+  });
+}
+
+// ── RT Tasas por Tramo × Segmento ─────────────────────────────────────────────
+function rtUpdTasaTramo(d) {
+  const m = {};
+  const tramoSet = new Set(), segSet = new Set();
+  d.forEach(r => {
+    if (!r.tramo || !r.segmento) return;
+    tramoSet.add(r.tramo); segSet.add(r.segmento);
+    if (!m[r.segmento]) m[r.segmento] = {};
+    if (!m[r.segmento][r.tramo]) m[r.segmento][r.tramo] = {sM:0,sTM:0};
+    m[r.segmento][r.tramo].sM  += r.monto;
+    m[r.segmento][r.tramo].sTM += r.tasa*r.monto;
+  });
+  const tramos   = [...tramoSet].sort((a,b)=>parseInt(a)-parseInt(b));
+  const segmentos = [...segSet].sort();
+  const datasets = segmentos.map((seg,i) => ({
+    label: seg,
+    data: tramos.map(t => { const v=m[seg]?.[t]; return v&&v.sM>0?+(v.sTM/v.sM).toFixed(3):null; }),
+    montoData: tramos.map(t => m[seg]?.[t]?.sM||0),
+    borderColor: SEG_PALETTE[i%SEG_PALETTE.length],
+    backgroundColor: 'transparent',
+    pointBackgroundColor: SEG_PALETTE[i%SEG_PALETTE.length],
+    borderWidth:2.2, pointRadius:5, pointHoverRadius:7, tension:0.25, spanGaps:false,
+  }));
+  if (rtCharts.tasaTramo) rtCharts.tasaTramo.destroy();
+  rtCharts.tasaTramo = new Chart(document.getElementById('rtCTasaTramo'), {
+    type:'line',
+    data:{ labels: tramos.map(t=>t+' días'), datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{position:'top',labels:{font:{size:10},boxWidth:10,padding:10,usePointStyle:true}},
+        tooltip:{callbacks:{label:ctx=>{
+          if(ctx.raw===null) return null;
+          const monto=ctx.dataset.montoData?.[ctx.dataIndex]??0;
+          return ` ${ctx.dataset.label}: ${ctx.raw.toFixed(2)}%  ·  ${fmtM(monto)}`;
+        }}}
+      },
+      scales:{
+        x:{grid:{color:'#f3f4f6'},ticks:{font:{size:10}}},
+        y:{grid:{color:'#f3f4f6'},ticks:{callback:v=>v+'%',font:{size:10}},
+           title:{display:true,text:'TNA (%)',font:{size:10}}}
+      }
+    }
+  });
+}
+
+// ── RT Pies ───────────────────────────────────────────────────────────────────
+function rtUpdPies(d) {
+  const mTipo={}, mMon={}, mSeg={};
+  d.forEach(r => {
+    if(r.tipo)    mTipo[r.tipo]    = (mTipo[r.tipo]||0)+r.monto;
+    if(r.moneda)  mMon[r.moneda]   = (mMon[r.moneda]||0)+r.monto;
+    if(r.segmento)mSeg[r.segmento] = (mSeg[r.segmento]||0)+r.monto;
+  });
+  const mk = (canvasId, key, entries, colors) => {
+    if (rtCharts[key]) rtCharts[key].destroy();
+    rtCharts[key] = new Chart(document.getElementById(canvasId), {
+      type:'doughnut',
+      data:{ labels: entries.map(([k])=>k), datasets:[{
+        data: entries.map(([,v])=>v),
+        backgroundColor: colors, borderColor:'#fff', borderWidth:2, hoverOffset:5
+      }]},
+      options:{
+        responsive:true, maintainAspectRatio:false, cutout:'58%',
+        plugins:{
+          legend:{position:'bottom',labels:{boxWidth:8,padding:8,font:{size:10},color:'#6b7280',usePointStyle:true}},
+          tooltip:{callbacks:{label:ctx=>{
+            const total=ctx.dataset.data.reduce((a,b)=>a+b,0);
+            return ` ${ctx.label}: ${total>0?((ctx.raw/total)*100).toFixed(1):0}%  (${fmtM(ctx.raw)})`;
+          }}}
+        }
+      }
+    });
+  };
+  const tiposSorted = Object.entries(mTipo).sort((a,b)=>b[1]-a[1]);
+  mk('rtCPieInst','pie_rtInst', tiposSorted, tiposSorted.map((_,i)=>TIPO_PALETTE[i%TIPO_PALETTE.length]));
+  const monsSorted  = Object.entries(mMon).sort((a,b)=>b[1]-a[1]);
+  mk('rtCPieMon','pie_rtMon',
+    monsSorted.map(([k,v])=>[MON_LABELS[k]||k,v]),
+    monsSorted.map(([k])=>MON_PALETTE[k]||'#B2B2B2'));
+  const segsSorted  = Object.entries(mSeg).sort((a,b)=>b[1]-a[1]);
+  mk('rtCPieSeg','pie_rtSeg', segsSorted, segsSorted.map((_,i)=>SEG_PALETTE[i%SEG_PALETTE.length]));
+}
+
+// ── RT Tabla operaciones ──────────────────────────────────────────────────────
+function rtUpdTable(d) {
+  // Cat chips
+  const allCats = ['ALL',...d.reduce((s,r)=>{ s.add(r.categoria||'Sin clasificar'); return s;},new Set())];
+  const chipsEl = document.getElementById('rtCatChips');
+  if (chipsEl) {
+    chipsEl.innerHTML = allCats.map(c=>{
+      const col=c==='ALL'?'#6B7280':(CAT_COLORS[c]||'#94a3b8'), on=rtTblCat===c;
+      return `<button onclick="rtTblCat='${c}';rtUpdTable(rtFilteredData)"
+        style="padding:3px 10px;border-radius:20px;border:1px solid ${col};cursor:pointer;font-family:inherit;font-size:11px;
+               background:${on?col:'transparent'};color:${on?'#fff':col};transition:all .15s">
+        ${c==='ALL'?'Todas':c}</button>`;
+    }).join('');
+  }
+
+  // Filtros
+  let rows = [...d].sort((a,b)=>b.hora?.localeCompare(a.hora||''));
+  if (rtTblCat !== 'ALL') rows = rows.filter(r=>(r.categoria||'Sin clasificar')===rtTblCat);
+  if (rtTblSearch) rows = rows.filter(r=>r.empresa.toLowerCase().includes(rtTblSearch));
+
+  document.getElementById('rtTblSub').textContent =
+    `${rows.length} operación${rows.length!==1?'es':''} · ordenadas por hora (desc)`;
+
+  document.getElementById('rtTEmp').innerHTML = rows.map((r,i)=>{
+    const cat=r.categoria||'Sin clasificar', col=CAT_COLORS[cat]||'#94a3b8';
+    return `<tr>
+      <td style="color:var(--muted);width:24px">${i+1}</td>
+      <td style="font-weight:600;color:#1A49C8">${r.hora||'—'}</td>
+      <td style="font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.empresa}">${r.empresa||'—'}</td>
+      <td><span class="bcat" style="background:${col}22;color:${col}">${cat}</span></td>
+      <td style="color:var(--muted)">${r.tramo||'—'} días</td>
+      <td style="color:var(--muted)">${r.segmento||'—'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${fmtM(r.monto)}</td>
+      <td style="text-align:right;color:#E32D91;font-weight:700">${r.tasa.toFixed(2)}%</td>
+    </tr>`;
+  }).join('');
+}
 </script>
 </body>
 </html>
