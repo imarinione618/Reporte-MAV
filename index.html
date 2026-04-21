@@ -388,7 +388,7 @@ const MON_LABELS = {'$':'$ ARS','DOL':'Hard Dollar','U$D':'Dólar A3500','U$S':'
 // ── State ─────────────────────────────────────────────────────────────────────
 let rawData = [];
 let charts  = {};
-const F = { moneda:'ALL', segmento:'ALL', tipo:'ALL', desde:'', hasta:'' };
+const F = { monedas:[], segmento:'ALL', tipo:'ALL', desde:'', hasta:'' }; // monedas: [] = todas
 let F_inst  = 'ALL'; // instrumento toggle independiente
 let tblCat    = 'ALL'; // tabla empresas: filtro por categoría
 let tblTramo  = 'ALL'; // tabla empresas: filtro por tramo
@@ -511,14 +511,13 @@ function initFilters() {
   const segmentos = uniq(rawData.map(r => r.segmento));
   const tipos     = uniq(rawData.map(r => r.tipo));
 
-  // Moneda buttons — sin opción "Todas", pre-selecciona la primera moneda disponible
+  // Moneda buttons — multi-select: click para activar/desactivar, ninguno = todas
   const wrap = document.getElementById('monWrap');
   wrap.innerHTML = '';
-  const defaultMon = monedas.includes('$') ? '$' : monedas[0];
-  if (F.moneda === 'ALL') F.moneda = defaultMon; // forzar selección
+  if (!F.monedas.length) F.monedas = [monedas.includes('$') ? '$' : monedas[0]];
   monedas.forEach(m => {
     const b = document.createElement('button');
-    b.className = 'mon-btn' + (m === F.moneda ? ' on' : '');
+    b.className = 'mon-btn' + (F.monedas.includes(m) ? ' on' : '');
     b.dataset.v = m;
     b.textContent = MON_LABELS[m] || m;
     b.onclick = function(){ setMon(this); };
@@ -557,13 +556,23 @@ function initFilters() {
 }
 
 function setMon(btn) {
-  document.querySelectorAll('.mon-btn').forEach(b => b.classList.remove('on'));
-  btn.classList.add('on'); F.moneda = btn.dataset.v; applyFilters();
+  const v = btn.dataset.v;
+  const idx = F.monedas.indexOf(v);
+  if (idx >= 0) {
+    // Si ya estaba activa: deseleccionar, pero nunca dejar vacío
+    if (F.monedas.length > 1) F.monedas.splice(idx, 1);
+  } else {
+    F.monedas.push(v);
+  }
+  document.querySelectorAll('.mon-btn').forEach(b =>
+    b.classList.toggle('on', F.monedas.includes(b.dataset.v))
+  );
+  applyFilters();
 }
 function resetFilters() {
   const monedas = [...new Set(rawData.map(r=>r.moneda))].filter(Boolean).sort();
   const defaultMon = monedas.includes('$') ? '$' : monedas[0];
-  F.moneda = defaultMon; F.segmento = 'ALL'; F.tipo = 'ALL';
+  F.monedas = [defaultMon]; F.segmento = 'ALL'; F.tipo = 'ALL';
   const dates = [...new Set(rawData.map(r=>r.date))].filter(Boolean).sort();
   F.desde = dates[0]; F.hasta = dates[dates.length-1];
   document.querySelectorAll('.mon-btn').forEach(b =>
@@ -577,7 +586,7 @@ function resetFilters() {
 }
 function filtered() {
   return rawData.filter(r => {
-    if (F.moneda   !== 'ALL' && r.moneda   !== F.moneda)   return false;
+    if (F.monedas.length && !F.monedas.includes(r.moneda)) return false;
     if (F.segmento !== 'ALL' && r.segmento !== F.segmento) return false;
     if (F.tipo     !== 'ALL' && r.tipo     !== F.tipo)     return false;
     if (F.desde && r.date < F.desde) return false;
@@ -621,11 +630,14 @@ function updKPIs(d) {
   document.getElementById('kOpsSub').textContent = ops>0 ? fmtM(sumM/ops)+' prom / op.' : '—';
 
   // Tags de contexto bajo la tasa
-  const monLabel  = F.moneda   === 'ALL' ? 'Todas las monedas' : (MON_LABELS[F.moneda]  || F.moneda);
+  const allMon    = [...new Set(rawData.map(r=>r.moneda))].filter(Boolean);
+  const allSel    = F.monedas.length >= allMon.length;
+  const monLabel  = allSel ? 'Todas las monedas'
+                   : F.monedas.map(m => MON_LABELS[m] || m).join(' + ');
   const segLabel  = F.segmento === 'ALL' ? 'Todos los segmentos' : F.segmento;
   const tipoLabel = F.tipo     === 'ALL' ? 'Todos los instrumentos' : F.tipo;
   const tags = [
-    { text: monLabel,  color: F.moneda   === 'ALL' ? '#B2B2B2' : '#E32D91' },
+    { text: monLabel,  color: allSel             ? '#B2B2B2' : '#E32D91' },
     { text: segLabel,  color: F.segmento === 'ALL' ? '#B2B2B2' : '#1A49C8' },
     { text: tipoLabel, color: F.tipo     === 'ALL' ? '#B2B2B2' : '#7B1FAE' },
   ];
@@ -646,7 +658,8 @@ function updFilterHighlight() {
   // fg wrappers
   fSeg?.closest('.fg')?.classList.toggle('active',  F.segmento !== 'ALL');
   fTipo?.closest('.fg')?.classList.toggle('active', F.tipo     !== 'ALL');
-  document.getElementById('monWrap')?.closest('.fg')?.classList.toggle('active', F.moneda !== 'ALL');
+  const allMonedas = [...new Set(rawData.map(r=>r.moneda))].filter(Boolean);
+  document.getElementById('monWrap')?.closest('.fg')?.classList.toggle('active', F.monedas.length < allMonedas.length);
 }
 
 // ── Tramo bar ─────────────────────────────────────────────────────────────────
@@ -1088,3 +1101,4 @@ window.addEventListener('resize', ()=>{ if(rawData.length) updTreemap(filtered()
 </script>
 </body>
 </html>
+
