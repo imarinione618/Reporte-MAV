@@ -138,6 +138,34 @@
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
     .rt-hora { font-size: 28px; font-weight: 700; color: var(--text); }
     .rt-fecha-lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Bubble chart empresa selector ── */
+    .emp-selector { position:relative; }
+    .emp-input-wrap { display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+      border:1px solid var(--border); border-radius:6px; padding:4px 8px;
+      background:var(--card); min-height:34px; cursor:text; }
+    .emp-input-wrap:focus-within { border-color:var(--pri); }
+    .emp-chip { display:flex; align-items:center; gap:4px; padding:2px 8px;
+      background:var(--pri-l); color:var(--pri); border-radius:12px;
+      font-size:11px; font-weight:600; white-space:nowrap; }
+    .emp-chip button { background:none; border:none; cursor:pointer; color:var(--pri);
+      font-size:13px; line-height:1; padding:0; }
+    .emp-search-input { border:none; outline:none; background:transparent;
+      font-family:inherit; font-size:12px; color:var(--text); min-width:120px; flex:1; }
+    .emp-dropdown { position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:50;
+      background:var(--card); border:1px solid var(--border); border-radius:8px;
+      box-shadow:0 4px 16px rgba(0,0,0,.12); max-height:220px; overflow-y:auto; display:none; }
+    .emp-dropdown.open { display:block; }
+    .emp-opt { padding:7px 12px; font-size:12px; cursor:pointer; display:flex;
+      align-items:center; gap:8px; }
+    .emp-opt:hover { background:var(--bg); }
+    .emp-opt input[type=checkbox] { accent-color:var(--pri); }
+    .emp-opt.selected { font-weight:600; color:var(--pri); }
+    .emp-sel-actions { display:flex; gap:8px; padding:6px 12px;
+      border-bottom:1px solid var(--border); }
+    .emp-sel-actions button { font-size:11px; color:var(--muted); background:none;
+      border:none; cursor:pointer; padding:0; font-family:inherit; }
+    .emp-sel-actions button:hover { color:var(--pri); }
     /* Resumen por Instrumento */
     .instr-toggle { display:flex; gap:4px; }
     .instr-btn { padding:5px 14px; border:1px solid var(--border); border-radius:6px;
@@ -513,6 +541,64 @@
             <tbody id="rtTEmp"></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- Curva de Tasas – Bubble Chart -->
+    <div class="row">
+      <div class="card card-full">
+        <div class="card-hdr" style="flex-wrap:wrap;gap:10px">
+          <div>
+            <span class="card-ttl">Curva de Tasas por Plazo</span>
+            <span class="card-sub" style="display:block;margin-top:2px">Eje X = días · Eje Y = tasa ponderada · Tamaño = volumen</span>
+          </div>
+          <span class="card-sub" id="bubbleSub" style="margin-left:auto">—</span>
+        </div>
+
+        <!-- Controles del bubble -->
+        <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-bottom:14px">
+
+          <!-- Categoría -->
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px">Categoría</div>
+            <div id="bubbleCatChips" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+          </div>
+
+          <!-- Selector empresas -->
+          <div style="flex:1;min-width:260px;max-width:480px">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px">Empresas <span id="bubbleEmpCount" style="font-weight:400;text-transform:none;letter-spacing:0">(todas)</span></div>
+            <div class="emp-selector" id="bubbleEmpSelector">
+              <div class="emp-input-wrap" id="bubbleEmpWrap" onclick="bubbleToggleDropdown()">
+                <div id="bubbleEmpChips" style="display:contents"></div>
+                <input class="emp-search-input" id="bubbleEmpInput" placeholder="Buscar empresa…"
+                  oninput="bubbleFilterDropdown(this.value)" onfocus="bubbleOpenDropdown()">
+              </div>
+              <div class="emp-dropdown" id="bubbleEmpDropdown">
+                <div class="emp-sel-actions">
+                  <button onclick="bubbleSelectAll()">Seleccionar todas</button>
+                  <button onclick="bubbleClearAll()">Limpiar</button>
+                </div>
+                <div id="bubbleEmpList"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Color por -->
+          <div>
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:5px">Color por</div>
+            <div style="display:flex;gap:5px">
+              <button id="bcBy-empresa"  onclick="bubbleSetColorBy('empresa')"
+                style="padding:4px 10px;border-radius:6px;border:1px solid var(--pri);font-family:inherit;font-size:11px;cursor:pointer;background:var(--pri);color:#fff">Empresa</button>
+              <button id="bcBy-categoria" onclick="bubbleSetColorBy('categoria')"
+                style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);font-family:inherit;font-size:11px;cursor:pointer;background:transparent;color:var(--muted)">Categoría</button>
+              <button id="bcBy-segmento" onclick="bubbleSetColorBy('segmento')"
+                style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);font-family:inherit;font-size:11px;cursor:pointer;background:transparent;color:var(--muted)">Segmento</button>
+            </div>
+          </div>
+
+        </div>
+
+        <div style="position:relative;height:420px"><canvas id="rtCBubble"></canvas></div>
       </div>
     </div>
 
@@ -1391,13 +1477,20 @@ function rtInitFilters() {
   const segmentos = uniq(rtRawData.map(r => r.segmento));
   const tipos     = uniq(rtRawData.map(r => r.tipo));
 
+  // Monedas: siempre mostrar todas las del histórico; marcar sin datos si no aparecen hoy
+  const uniqHist = arr => [...new Set(arr)].filter(Boolean).sort();
+  const allMonedas = rawData.length ? uniqHist(rawData.map(r=>r.moneda)) : monedas;
   const wrap = document.getElementById('rtMonWrap');
   wrap.innerHTML = '';
-  if (!RT_F.monedas.length) RT_F.monedas = [monedas.includes('$') ? '$' : monedas[0]];
-  monedas.forEach(m => {
+  if (!RT_F.monedas.length) RT_F.monedas = [allMonedas.includes('$') ? '$' : allMonedas[0]];
+  allMonedas.forEach(m => {
+    const hasData = monedas.includes(m);
     const b = document.createElement('button');
     b.className = 'mon-btn' + (RT_F.monedas.includes(m) ? ' on' : '');
-    b.dataset.v = m; b.textContent = MON_LABELS[m] || m;
+    b.dataset.v = m;
+    b.textContent = MON_LABELS[m] || m;
+    b.title = hasData ? '' : 'Sin operaciones hoy';
+    b.style.opacity = hasData ? '1' : '0.45';
     b.onclick = function(){ rtSetMon(this); };
     wrap.appendChild(b);
   });
@@ -1454,6 +1547,7 @@ function rtApplyFilters() {
   rtUpdTasaTramo(rtFilteredData);
   rtUpdPies(rtFilteredData);
   rtUpdTable(rtFilteredData);
+  rtUpdBubble(rtFilteredData);
 }
 
 // ── RT KPIs ───────────────────────────────────────────────────────────────────
@@ -1722,7 +1816,257 @@ function rtUpdTable(d) {
     </tr>`;
   }).join('');
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BUBBLE CHART – Curva de Tasas por Plazo
+// ══════════════════════════════════════════════════════════════════════════════
+
+let bubbleCat       = 'ALL';   // filtro categoría
+let bubbleEmpresas  = [];      // [] = todas; array de nombres = sólo esas
+let bubbleColorBy   = 'empresa'; // 'empresa' | 'categoria' | 'segmento'
+
+// Convierte tramo "31-60" → midpoint 45 | "181+" → 200
+function tramoMid(tramo) {
+  if (!tramo) return 0;
+  const s = tramo.replace(/\s/g,'').replace('+','');
+  const p = s.split('-');
+  if (p.length === 2) return (parseInt(p[0]) + parseInt(p[1])) / 2;
+  return parseInt(p[0]) || 0;
+}
+
+// Paleta dinámica — cicla por los colores disponibles
+const BUBBLE_PALETTE = [
+  '#E32D91','#1A49C8','#7B1FAE','#22c55e','#f59e0b','#06b6d4',
+  '#ef4444','#8b5cf6','#10b981','#f97316','#3b82f6','#ec4899',
+  '#14b8a6','#a855f7','#eab308','#6366f1','#84cc16','#f43f5e',
+];
+
+function bubbleColorPalette(keys) {
+  const map = {};
+  keys.forEach((k, i) => { map[k] = BUBBLE_PALETTE[i % BUBBLE_PALETTE.length]; });
+  return map;
+}
+
+// ── Categoría chips ───────────────────────────────────────────────────────────
+function bubbleRenderCatChips(d) {
+  const cats = ['ALL', ...[...new Set(d.map(r=>r.categoria||'Sin clasificar'))].sort()];
+  const el = document.getElementById('bubbleCatChips');
+  if (!el) return;
+  el.innerHTML = cats.map(c => {
+    const col = c==='ALL' ? '#6B7280' : (CAT_COLORS[c]||'#94a3b8');
+    const on  = bubbleCat === c;
+    return `<button onclick="bubbleCat='${c}';rtUpdBubble(rtFilteredData)"
+      style="padding:3px 10px;border-radius:20px;border:1px solid ${col};cursor:pointer;
+             font-family:inherit;font-size:11px;
+             background:${on?col:'transparent'};color:${on?'#fff':col};transition:all .15s">
+      ${c==='ALL'?'Todas':c}</button>`;
+  }).join('');
+}
+
+// ── Empresa selector ──────────────────────────────────────────────────────────
+let _bubbleAllEmps = [];
+
+function bubbleRenderEmpSelector(d) {
+  _bubbleAllEmps = [...new Set(d.map(r=>r.empresa).filter(Boolean))].sort();
+  bubbleRenderEmpChips();
+  bubbleRenderEmpList('');
+}
+
+function bubbleRenderEmpChips() {
+  const el = document.getElementById('bubbleEmpChips');
+  if (!el) return;
+  el.innerHTML = bubbleEmpresas.map(e =>
+    `<span class="emp-chip">${e}
+      <button onclick="bubbleRemoveEmp('${e.replace(/'/g,"\\'")}');event.stopPropagation()">×</button>
+    </span>`
+  ).join('');
+  const cnt = document.getElementById('bubbleEmpCount');
+  if (cnt) cnt.textContent = bubbleEmpresas.length
+    ? `(${bubbleEmpresas.length} seleccionada${bubbleEmpresas.length>1?'s':''})`
+    : '(todas)';
+}
+
+function bubbleRenderEmpList(query) {
+  const el = document.getElementById('bubbleEmpList');
+  if (!el) return;
+  const q = query.toLowerCase();
+  const filtered = q ? _bubbleAllEmps.filter(e=>e.toLowerCase().includes(q)) : _bubbleAllEmps;
+  el.innerHTML = filtered.map(e => {
+    const sel = bubbleEmpresas.includes(e);
+    return `<label class="emp-opt ${sel?'selected':''}">
+      <input type="checkbox" ${sel?'checked':''} onchange="bubbleToggleEmp('${e.replace(/'/g,"\\'")}',this.checked)">
+      ${e}
+    </label>`;
+  }).join('');
+}
+
+function bubbleToggleDropdown() {
+  const dd = document.getElementById('bubbleEmpDropdown');
+  dd?.classList.toggle('open');
+}
+function bubbleOpenDropdown() {
+  document.getElementById('bubbleEmpDropdown')?.classList.add('open');
+}
+function bubbleFilterDropdown(val) {
+  bubbleRenderEmpList(val);
+  document.getElementById('bubbleEmpDropdown')?.classList.add('open');
+}
+function bubbleToggleEmp(emp, checked) {
+  if (checked && !bubbleEmpresas.includes(emp)) bubbleEmpresas.push(emp);
+  else if (!checked) bubbleEmpresas = bubbleEmpresas.filter(e=>e!==emp);
+  bubbleRenderEmpChips();
+  rtUpdBubble(rtFilteredData);
+}
+function bubbleRemoveEmp(emp) {
+  bubbleEmpresas = bubbleEmpresas.filter(e=>e!==emp);
+  bubbleRenderEmpChips();
+  bubbleRenderEmpList(document.getElementById('bubbleEmpInput')?.value||'');
+  rtUpdBubble(rtFilteredData);
+}
+function bubbleSelectAll() {
+  bubbleEmpresas = [..._bubbleAllEmps];
+  bubbleRenderEmpChips();
+  bubbleRenderEmpList(document.getElementById('bubbleEmpInput')?.value||'');
+  rtUpdBubble(rtFilteredData);
+}
+function bubbleClearAll() {
+  bubbleEmpresas = [];
+  bubbleRenderEmpChips();
+  bubbleRenderEmpList(document.getElementById('bubbleEmpInput')?.value||'');
+  rtUpdBubble(rtFilteredData);
+}
+function bubbleSetColorBy(by) {
+  bubbleColorBy = by;
+  ['empresa','categoria','segmento'].forEach(k => {
+    const b = document.getElementById('bcBy-'+k);
+    if (!b) return;
+    const on = k===by;
+    b.style.background = on ? 'var(--pri)' : 'transparent';
+    b.style.color      = on ? '#fff' : 'var(--muted)';
+    b.style.borderColor= on ? 'var(--pri)' : 'var(--border)';
+  });
+  rtUpdBubble(rtFilteredData);
+}
+
+// Cerrar dropdown al clickear fuera
+document.addEventListener('click', e => {
+  const sel = document.getElementById('bubbleEmpSelector');
+  if (sel && !sel.contains(e.target))
+    document.getElementById('bubbleEmpDropdown')?.classList.remove('open');
+});
+
+// ── Main bubble chart renderer ────────────────────────────────────────────────
+function rtUpdBubble(d) {
+  bubbleRenderCatChips(d);
+  bubbleRenderEmpSelector(d);
+
+  // Filtros locales al bubble
+  let rows = d;
+  if (bubbleCat !== 'ALL') rows = rows.filter(r=>(r.categoria||'Sin clasificar')===bubbleCat);
+  if (bubbleEmpresas.length) rows = rows.filter(r=>bubbleEmpresas.includes(r.empresa));
+
+  // Agregar: groupKey × tramo → {sM, sTM}
+  const getKey = r => {
+    if (bubbleColorBy==='empresa')   return r.empresa || 'Sin empresa';
+    if (bubbleColorBy==='categoria') return r.categoria || 'Sin clasificar';
+    return r.segmento || 'Sin segmento';
+  };
+
+  const agg = {};
+  rows.forEach(r => {
+    if (!r.tramo) return;
+    const key   = getKey(r);
+    const tramo = r.tramo;
+    const k     = key + '||' + tramo;
+    if (!agg[k]) agg[k] = { key, tramo, sM:0, sTM:0 };
+    agg[k].sM  += r.monto;
+    agg[k].sTM += r.tasa * r.monto;
+  });
+
+  // Obtener todas las keys (empresas/cats/segs) para asignar colores
+  const allKeys = [...new Set(Object.values(agg).map(v=>v.key))].sort();
+  const colorMap = bubbleColorBy==='categoria'
+    ? Object.fromEntries(allKeys.map(k=>[k, CAT_COLORS[k]||'#94a3b8']))
+    : bubbleColorBy==='segmento'
+    ? Object.fromEntries(allKeys.map((k,i)=>[k, SEG_PALETTE[i%SEG_PALETTE.length]]))
+    : bubbleColorPalette(allKeys);
+
+  // Normalizar radios: sqrt(monto), máx = 30px
+  const maxMonto = Math.max(...Object.values(agg).map(v=>v.sM), 1);
+  const scaleR   = v => Math.max(4, Math.sqrt(v.sM / maxMonto) * 30);
+
+  // Un dataset por key para que la leyenda funcione
+  const datasets = allKeys.map(key => {
+    const pts = Object.values(agg)
+      .filter(v => v.key === key && v.sM > 0)
+      .map(v => ({
+        x: tramoMid(v.tramo),
+        y: +(v.sTM / v.sM).toFixed(3),
+        r: scaleR(v),
+        _monto: v.sM,
+        _tramo: v.tramo,
+        _key:   key,
+      }));
+    const col = colorMap[key] || '#B2B2B2';
+    return {
+      label: key,
+      data:  pts,
+      backgroundColor: col + 'aa',
+      borderColor:     col,
+      borderWidth: 1.5,
+    };
+  }).filter(ds => ds.data.length > 0);
+
+  document.getElementById('bubbleSub').textContent =
+    `${rows.length} operaciones · ${allKeys.length} ${bubbleColorBy==='empresa'?'empresa':'grupo'}${allKeys.length!==1?'s':''}`;
+
+  if (rtCharts.bubble) rtCharts.bubble.destroy();
+  rtCharts.bubble = new Chart(document.getElementById('rtCBubble'), {
+    type: 'bubble',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode:'point', intersect:true },
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { boxWidth:10, padding:10, font:{size:11}, usePointStyle:true,
+            // Si hay muchas empresas, limitar leyenda
+            filter: (_, data) => data.datasets.length <= 20
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const p = ctx.raw;
+              return [
+                ` ${p._key}`,
+                ` Tramo: ${p._tramo} días`,
+                ` Tasa:  ${p.y.toFixed(2)}%`,
+                ` Monto: ${fmtM(p._monto)}`,
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display:true, text:'Plazo (días)', font:{size:11} },
+          ticks: { font:{size:10}, callback: v => v+' d' },
+          grid:  { color:'#f3f4f6' },
+          min: 0,
+        },
+        y: {
+          title: { display:true, text:'Tasa Ponderada TNA (%)', font:{size:11} },
+          ticks: { callback: v => v+'%', font:{size:10} },
+          grid:  { color:'#f3f4f6' },
+        }
+      }
+    }
+  });
+}
 </script>
 </body>
 </html>
+
 
