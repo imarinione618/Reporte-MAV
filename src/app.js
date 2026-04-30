@@ -58,7 +58,7 @@ let filteredData = []; // última vista filtrada (para actualizar tabla sin reca
 
 // ── Data loader ───────────────────────────────────────────────────────────────
 async function loadAndRender() {
-  showLoading('Cargando datos desde Google Sheets…');
+  showLoading('Cargando datos…');
   let lastErr = '';
   for (const url of CSV_URLS) {
     try {
