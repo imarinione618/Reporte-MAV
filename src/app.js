@@ -1566,9 +1566,6 @@ function initEmpTab() {
   const dates = rawData.map(r => r.date).sort();
   document.getElementById('empDesde').value = dates[0] || '';
   document.getElementById('empHasta').value = dates[dates.length - 1] || '';
-  const now = new Date();
-  document.getElementById('empMesProj').value =
-    now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2,'0');
   renderEmpMainDrop('');
   renderEmpCmpDrop('');
 }
@@ -1892,53 +1889,72 @@ function fmtMesLabel(mesStr) {
 }
 
 function renderEmpVencimientos(data) {
-  const mesProj = document.getElementById('empMesProj').value;
   const allEmps = [empMain, ...empCmpList];
+  const now = new Date();
+  const mesCur = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+
+  // Calcular vencimientos proyectados (fecha emisión + PPV)
   const byMes = {};
   data.forEach(r => {
     if (isNaN(r.ppv)||r.ppv<=0) return;
     const vto = new Date(r.date+'T00:00:00');
     vto.setDate(vto.getDate()+Math.round(r.ppv));
     const k = vto.getFullYear()+'-'+String(vto.getMonth()+1).padStart(2,'0');
+    if (k < mesCur) return; // solo desde hoy en adelante
     if (!byMes[k]) byMes[k]={};
     byMes[k][r.empresa]=(byMes[k][r.empresa]||0)+r.monto;
   });
-  const allMeses = Object.keys(byMes).sort();
-  if (!allMeses.length) { if (empChartVenc){empChartVenc.destroy();empChartVenc=null;} return; }
-  const mesMax = [allMeses[allMeses.length-1],mesProj].filter(Boolean).sort().pop();
-  const range=[];
-  let cur=new Date(allMeses[0]+'-01T00:00:00');
-  const end=new Date(mesMax+'-01T00:00:00');
-  while(cur<=end){
-    range.push(cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0'));
-    cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+
+  const futureMeses = Object.keys(byMes).sort();
+  if (!futureMeses.length) {
+    if (empChartVenc){ empChartVenc.destroy(); empChartVenc=null; }
+    document.getElementById('empVncSub').textContent = 'Sin vencimientos proyectados desde hoy';
+    return;
   }
-  const datasets = allEmps.map((emp,i)=>{
+
+  // Range: desde mes actual hasta último mes con datos
+  const range = [];
+  let cur = new Date(mesCur+'-01T00:00:00');
+  const end = new Date(futureMeses[futureMeses.length-1]+'-01T00:00:00');
+  while (cur <= end) {
+    range.push(cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0'));
+    cur = new Date(cur.getFullYear(), cur.getMonth()+1, 1);
+  }
+
+  const datasets = allEmps.map((emp,i) => {
     const baseColor = i===0 ? EMP_MAIN_COLOR : EMP_PALETTE[i%EMP_PALETTE.length];
     return {
       label: emp,
-      data: range.map(m=>(byMes[m]?.[emp]||0)/1e6),
-      backgroundColor: range.map(m => m===mesProj ? baseColor+'ff' : baseColor+'cc'),
-      borderColor: range.map(m => m===mesProj ? '#212121' : baseColor),
-      borderWidth: range.map(m => m===mesProj ? 2 : 1),
+      data: range.map(m => (byMes[m]?.[emp]||0)/1e6),
+      backgroundColor: baseColor+'cc',
+      borderColor: baseColor,
+      borderWidth: 1,
     };
   });
+
   if (empChartVenc) empChartVenc.destroy();
-  empChartVenc = new Chart(document.getElementById('empCVenc'),{
-    type:'bar', data:{labels:range,datasets},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{position:'top',labels:{boxWidth:10,font:{size:11}}},
-        tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(1)}M`}}},
+  empChartVenc = new Chart(document.getElementById('empCVenc'), {
+    type:'bar', data:{ labels: range.map(fmtMesLabel), datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ position:'top', labels:{boxWidth:10,font:{size:11}} },
+        tooltip:{ callbacks:{ label:ctx=>` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(1)}M` } }
+      },
       scales:{
-        x:{stacked:true,ticks:{font:{size:10},maxRotation:45},grid:{display:false}},
-        y:{stacked:true,title:{display:true,text:'Monto (millones)',font:{size:11}},
-          ticks:{callback:v=>'$'+v+'M',font:{size:10}},grid:{color:'#f3f4f6'}},
-      }}
+        x:{ stacked:true, ticks:{font:{size:10},maxRotation:45}, grid:{display:false} },
+        y:{ stacked:true,
+            title:{display:true,text:'Monto (millones)',font:{size:11}},
+            ticks:{callback:v=>'$'+v+'M',font:{size:10}},
+            grid:{color:'#f3f4f6'} }
+      }
+    }
   });
-  const montoProj = Object.values(byMes[mesProj]||{}).reduce((a,b)=>a+b,0);
-  document.getElementById('empVncSub').textContent = mesProj
-    ? `Proyectado en ${fmtMesLabel(mesProj)}: ${montoProj > 0 ? fmtM(montoProj) : 'sin vencimientos'}`
-    : 'Monto proyectado (fecha emisión + PPV días)';
+
+  // Subtítulo: total proyectado
+  const total = Object.values(byMes).flatMap(Object.values).reduce((a,b)=>a+b,0);
+  document.getElementById('empVncSub').textContent =
+    `Vencimientos proyectados: ${fmtM(total)} · hasta ${fmtMesLabel(futureMeses[futureMeses.length-1])}`;
 }
 
 // ── Distribución por tramo (empresa principal) ──────────────────────
