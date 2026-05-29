@@ -1931,7 +1931,7 @@ function renderEmpVencimientos(data) {
     const baseColor = i===0 ? EMP_MAIN_COLOR : EMP_PALETTE[i%EMP_PALETTE.length];
     return {
       label: emp,
-      data: range.map(m => (byMes[m]?.[emp]||0)/1e6),
+      data: range.map(m => (byMes[m]?.[emp]||0)/1e9),
       backgroundColor: baseColor+'cc',
       borderColor: baseColor,
       borderWidth: 1,
@@ -1945,13 +1945,13 @@ function renderEmpVencimientos(data) {
       responsive:true, maintainAspectRatio:false,
       plugins:{
         legend:{ position:'top', labels:{boxWidth:10,font:{size:11}} },
-        tooltip:{ callbacks:{ label:ctx=>` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(1)}M` } }
+        tooltip:{ callbacks:{ label:ctx=>` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(1)} MM` } }
       },
       scales:{
         x:{ stacked:true, ticks:{font:{size:10},maxRotation:45}, grid:{display:false} },
         y:{ stacked:true,
-            title:{display:true,text:'Monto (millones)',font:{size:11}},
-            ticks:{callback:v=>'$'+v+'M',font:{size:10}},
+            title:{display:true,text:'Miles de millones ($)',font:{size:11}},
+            ticks:{callback:v=>'$'+v+' MM',font:{size:10}},
             grid:{color:'#f3f4f6'} }
       }
     }
