@@ -1560,8 +1560,10 @@ function initEmpTab() {
   // Segmento select
   const segmentos = [...new Set(rawData.map(r => r.segmento).filter(Boolean))].sort();
   const fSeg = document.getElementById('empSegmento');
-  fSeg.innerHTML = '<option value="ALL">Todos</option>';
-  segmentos.forEach(s => fSeg.add(new Option(segLbl(s), s)));
+  if (fSeg) {
+    fSeg.innerHTML = '<option value="ALL">Todos</option>';
+    segmentos.forEach(s => fSeg.add(new Option(segLbl(s), s)));
+  }
 
   const dates = rawData.map(r => r.date).sort();
   document.getElementById('empDesde').value = dates[0] || '';
