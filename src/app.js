@@ -1557,6 +1557,12 @@ function initEmpTab() {
     wrap.appendChild(b);
   });
 
+  // Segmento select
+  const segmentos = [...new Set(rawData.map(r => r.segmento).filter(Boolean))].sort();
+  const fSeg = document.getElementById('empSegmento');
+  fSeg.innerHTML = '<option value="ALL">Todos</option>';
+  segmentos.forEach(s => fSeg.add(new Option(segLbl(s), s)));
+
   const dates = rawData.map(r => r.date).sort();
   document.getElementById('empDesde').value = dates[0] || '';
   document.getElementById('empHasta').value = dates[dates.length - 1] || '';
@@ -1684,15 +1690,16 @@ function renderEmp() {
   if (!empMain) { empty.style.display = ''; kpis.style.display = 'none'; return; }
   empty.style.display = 'none'; kpis.style.display = '';
 
-  const desde  = document.getElementById('empDesde').value;
-  const hasta  = document.getElementById('empHasta').value;
+  const desde    = document.getElementById('empDesde').value;
+  const hasta    = document.getElementById('empHasta').value;
+  const segmento = document.getElementById('empSegmento').value;
 
   const allEmps = [empMain, ...empCmpList];
   const empInstrMatch = tipo => {
     const t = (tipo || '').toLowerCase();
     if (empInstrFilter === 'PAG') return t.includes('pagar');
     if (empInstrFilter === 'FCE') return t.includes('fce');
-    if (empInstrFilter === 'CPD') return !t.includes('pagar') && !t.includes('fce'); // catch-all
+    if (empInstrFilter === 'CPD') return !t.includes('pagar') && !t.includes('fce');
     return true;
   };
   const data = rawData.filter(r =>
@@ -1700,7 +1707,8 @@ function renderEmp() {
     (!desde || r.date >= desde) &&
     (!hasta || r.date <= hasta) &&
     (!empMonedas.length || empMonedas.includes(r.moneda)) &&
-    empInstrMatch(r.tipo)
+    empInstrMatch(r.tipo) &&
+    (segmento === 'ALL' || segMatch(r.segmento, segmento))
   );
   _empLastData = data;
 
@@ -1768,31 +1776,44 @@ function renderEmpComparativo(data) {
     const ta = ed.reduce((s,r)=>s+r.tasa*r.monto,0)/(mo||1);
     const pd = ed.filter(r=>!isNaN(r.ppv)&&r.ppv>0);
     const pp = pd.reduce((s,r)=>s+r.ppv*r.monto,0)/(pd.reduce((s,r)=>s+r.monto,0)||1);
-    const tm = {};
-    tramos.forEach(t=>{tm[t]=mo?ed.filter(r=>r.tramo===t).reduce((s,r)=>s+r.monto,0)/mo:0;});
-    const color = i === 0 ? EMP_MAIN_COLOR : EMP_PALETTE[(i) % EMP_PALETTE.length];
+    // Tasa ponderada por tramo + acumuladores para el footer
+    const tm     = {}; // tasa ponderada (para display)
+    const tm_raw = {}; // {sM, sTM} para ponderar el footer
+    tramos.forEach(t => {
+      const rows = ed.filter(r => r.tramo === t);
+      const sM   = rows.reduce((s,r) => s+r.monto, 0);
+      const sTM  = rows.reduce((s,r) => s+r.tasa*r.monto, 0);
+      tm[t]     = sM > 0 ? sTM / sM : null; // null → sin datos
+      tm_raw[t] = { sM, sTM };
+    });
+    const color = i === 0 ? EMP_MAIN_COLOR : EMP_PALETTE[i % EMP_PALETTE.length];
     const label = i === 0 ? `★ ${emp}` : emp;
-    return { emp, label, mo, ta, pp, ops:ed.length, tm, color };
+    return { emp, label, mo, ta, pp, ops:ed.length, tm, tm_raw, color };
   });
 
   document.getElementById('empCmpBody').innerHTML = stats.map(r=>`<tr>
     <td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};margin-right:6px"></span>${r.label}</td>
-    <td>${fmtM(r.mo)}</td><td>${r.ta.toFixed(2)}%</td>
-    <td>${isFinite(r.pp)&&r.pp>0?Math.round(r.pp)+' d':'—'}</td><td>${r.ops}</td>
-    ${tramos.map(t=>`<td>${r.tm[t]>0?(r.tm[t]*100).toFixed(1)+'%':'—'}</td>`).join('')}
+    <td>${fmtM(r.mo)}</td><td>${r.mo>0?r.ta.toFixed(2)+'%':'—'}</td>
+    <td>${isFinite(r.pp)&&r.pp>0?Math.round(r.pp)+' d':'—'}</td><td>${r.ops||0}</td>
+    ${tramos.map(t=>`<td>${r.tm[t]!==null?r.tm[t].toFixed(2)+'%':'—'}</td>`).join('')}
   </tr>`).join('');
 
   // Promedio ponderado SOLO de las empresas de comparación
   const cmpStats = stats.slice(1);
-  const tot = cmpStats.reduce((s,r)=>s+r.mo,0);
+  const tot  = cmpStats.reduce((s,r)=>s+r.mo,0);
   const totT = cmpStats.reduce((s,r)=>s+r.ta*r.mo,0)/(tot||1);
   const totP = cmpStats.reduce((s,r)=>s+(isFinite(r.pp)?r.pp:0)*r.mo,0)/(tot||1);
+  // Tasa ponderada por tramo del grupo de comparación
   const totTm = {};
-  tramos.forEach(t=>{totTm[t]=cmpStats.reduce((s,r)=>s+r.tm[t]*r.mo,0)/(tot||1);});
+  tramos.forEach(t => {
+    const sM  = cmpStats.reduce((s,r)=>s+(r.tm_raw[t]?.sM  || 0), 0);
+    const sTM = cmpStats.reduce((s,r)=>s+(r.tm_raw[t]?.sTM || 0), 0);
+    totTm[t] = sM > 0 ? sTM / sM : null;
+  });
   document.getElementById('empCmpFoot').innerHTML = `<tr>
     <td>Prom. pond. comparación</td><td>${fmtM(tot)}</td><td>${tot>0?totT.toFixed(2)+'%':'—'}</td>
     <td>${tot>0&&isFinite(totP)&&totP>0?Math.round(totP)+' d':'—'}</td><td>${cmpStats.reduce((s,r)=>s+r.ops,0)}</td>
-    ${tramos.map(t=>`<td>${tot>0?(totTm[t]*100).toFixed(1)+'%':'—'}</td>`).join('')}
+    ${tramos.map(t=>`<td>${totTm[t]!==null?totTm[t].toFixed(2)+'%':'—'}</td>`).join('')}
   </tr>`;
 }
 
