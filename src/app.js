@@ -1753,7 +1753,7 @@ function renderEmpComparativo(data) {
     <td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};margin-right:6px"></span>${r.label}</td>
     <td>${fmtM(r.mo)}</td><td>${r.ta.toFixed(2)}%</td>
     <td>${isFinite(r.pp)&&r.pp>0?Math.round(r.pp)+' d':'—'}</td><td>${r.ops}</td>
-    ${tramos.map(t=>`<td>${(r.tm[t]*100).toFixed(1)}%</td>`).join('')}
+    ${tramos.map(t=>`<td>${r.tm[t]>0?(r.tm[t]*100).toFixed(1)+'%':'—'}</td>`).join('')}
   </tr>`).join('');
 
   // Promedio ponderado SOLO de las empresas de comparación
@@ -1796,7 +1796,14 @@ function renderEmpPies(data) {
 
 // ── Resumen por instrumento (reutiliza lógica de Histórico) ─────────
 function renderEmpInstr(data) {
-  const rows = empInstrFilter === 'ALL' ? data : data.filter(r => instrMatch(r.tipo));
+  const empInstrMatch = tipo => {
+    const t = (tipo || '').toLowerCase();
+    if (empInstrFilter === 'CPD') return t.includes('cpd') || t.includes('cheque');
+    if (empInstrFilter === 'PAG') return t.includes('pagar');
+    if (empInstrFilter === 'FCE') return t.includes('fce');
+    return true;
+  };
+  const rows = empInstrFilter === 'ALL' ? data : data.filter(r => empInstrMatch(r.tipo));
   const m = {};
   rows.forEach(r => {
     const seg = r.segmento || 'Sin segmento';
@@ -1837,6 +1844,12 @@ function renderEmpInstr(data) {
 }
 
 // ── Vencimientos por mes ────────────────────────────────────────────
+function fmtMesLabel(mesStr) {
+  if (!mesStr) return '';
+  const [y, m] = mesStr.split('-');
+  return new Date(+y, +m-1, 1).toLocaleDateString('es-AR', {month:'long', year:'numeric'});
+}
+
 function renderEmpVencimientos(data) {
   const mesProj = document.getElementById('empMesProj').value;
   const allEmps = [empMain, ...empCmpList];
@@ -1859,13 +1872,16 @@ function renderEmpVencimientos(data) {
     range.push(cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0'));
     cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
   }
-  const datasets = allEmps.map((emp,i)=>({
-    label: emp,
-    data: range.map(m=>(byMes[m]?.[emp]||0)/1e6),
-    backgroundColor: (i===0 ? EMP_MAIN_COLOR : EMP_PALETTE[i%EMP_PALETTE.length])+'cc',
-    borderColor:      i===0 ? EMP_MAIN_COLOR : EMP_PALETTE[i%EMP_PALETTE.length],
-    borderWidth: 1,
-  }));
+  const datasets = allEmps.map((emp,i)=>{
+    const baseColor = i===0 ? EMP_MAIN_COLOR : EMP_PALETTE[i%EMP_PALETTE.length];
+    return {
+      label: emp,
+      data: range.map(m=>(byMes[m]?.[emp]||0)/1e6),
+      backgroundColor: range.map(m => m===mesProj ? baseColor+'ff' : baseColor+'cc'),
+      borderColor: range.map(m => m===mesProj ? '#212121' : baseColor),
+      borderWidth: range.map(m => m===mesProj ? 2 : 1),
+    };
+  });
   if (empChartVenc) empChartVenc.destroy();
   empChartVenc = new Chart(document.getElementById('empCVenc'),{
     type:'bar', data:{labels:range,datasets},
@@ -1878,8 +1894,9 @@ function renderEmpVencimientos(data) {
           ticks:{callback:v=>'$'+v+'M',font:{size:10}},grid:{color:'#f3f4f6'}},
       }}
   });
+  const montoProj = Object.values(byMes[mesProj]||{}).reduce((a,b)=>a+b,0);
   document.getElementById('empVncSub').textContent = mesProj
-    ? `Vence en ${mesProj}: ${fmtM(Object.values(byMes[mesProj]||{}).reduce((a,b)=>a+b,0))}`
+    ? `Proyectado en ${fmtMesLabel(mesProj)}: ${montoProj > 0 ? fmtM(montoProj) : 'sin vencimientos'}`
     : 'Monto proyectado (fecha emisión + PPV días)';
 }
 
