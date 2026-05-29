@@ -1547,15 +1547,17 @@ function initEmpTab() {
   const monedas = [...new Set(rawData.map(r => r.moneda).filter(Boolean))].sort();
   if (!empMonedas.length) empMonedas = [monedas.includes('$') ? '$' : monedas[0]];
   const wrap = document.getElementById('empMonWrap');
-  wrap.innerHTML = '';
-  monedas.forEach(m => {
-    const b = document.createElement('button');
-    b.className = 'mon-btn' + (empMonedas.includes(m) ? ' on' : '');
-    b.dataset.v = m;
-    b.textContent = MON_LABELS[m] || m;
-    b.onclick = function() { empSetMon(this); };
-    wrap.appendChild(b);
-  });
+  if (wrap) {
+    wrap.innerHTML = '';
+    monedas.forEach(m => {
+      const b = document.createElement('button');
+      b.className = 'mon-btn' + (empMonedas.includes(m) ? ' on' : '');
+      b.dataset.v = m;
+      b.textContent = MON_LABELS[m] || m;
+      b.onclick = function() { empSetMon(this); };
+      wrap.appendChild(b);
+    });
+  }
 
   // Segmento select
   const segmentos = [...new Set(rawData.map(r => r.segmento).filter(Boolean))].sort();
@@ -1566,8 +1568,10 @@ function initEmpTab() {
   }
 
   const dates = rawData.map(r => r.date).sort();
-  document.getElementById('empDesde').value = dates[0] || '';
-  document.getElementById('empHasta').value = dates[dates.length - 1] || '';
+  const elDesde = document.getElementById('empDesde');
+  const elHasta = document.getElementById('empHasta');
+  if (elDesde) elDesde.value = dates[0] || '';
+  if (elHasta) elHasta.value = dates[dates.length - 1] || '';
   renderEmpMainDrop('');
   renderEmpCmpDrop('');
 }
@@ -1689,9 +1693,9 @@ function renderEmp() {
   if (!empMain) { empty.style.display = ''; kpis.style.display = 'none'; return; }
   empty.style.display = 'none'; kpis.style.display = '';
 
-  const desde    = document.getElementById('empDesde').value;
-  const hasta    = document.getElementById('empHasta').value;
-  const segmento = document.getElementById('empSegmento').value;
+  const desde    = document.getElementById('empDesde')?.value    || '';
+  const hasta    = document.getElementById('empHasta')?.value    || '';
+  const segmento = document.getElementById('empSegmento')?.value || 'ALL';
 
   const allEmps = [empMain, ...empCmpList];
   const empInstrMatch = tipo => {
