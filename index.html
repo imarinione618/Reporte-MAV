@@ -34,6 +34,7 @@
 <nav class="tab-nav">
   <button class="tab-btn on" onclick="switchTab('hist')">Histórico</button>
   <button class="tab-btn"    onclick="switchTab('rt')"><span class="live-dot" style="vertical-align:middle"></span>Tiempo Real</button>
+  <button class="tab-btn"    onclick="switchTab('emp')">Empresas</button>
 </nav>
 
 <!-- ══ SECCIÓN HISTÓRICO ══ -->
@@ -432,6 +433,125 @@
 
   </main>
 </div><!-- /sect-rt -->
+
+<!-- ══ SECCIÓN EMPRESAS ══ -->
+<div id="sect-emp" class="tab-section">
+
+  <!-- Barra de búsqueda -->
+  <div class="emp-search-box">
+    <div class="emp-search-row">
+      <div style="flex:1;min-width:280px">
+        <div class="emp-search-label">Buscar empresa(s)</div>
+        <div class="emp-multi-wrap" id="empMultiWrap">
+          <div class="emp-multi-input" id="empMultiInput" onclick="focusEmpInput()">
+            <input type="text" class="emp-text-in" id="empTextIn"
+              placeholder="Escribí para buscar…"
+              oninput="filterEmpDrop(this.value)"
+              onfocus="openEmpDrop()"
+              onblur="setTimeout(closeEmpDrop,200)">
+          </div>
+          <div class="emp-dd" id="empDd"></div>
+        </div>
+      </div>
+      <div>
+        <div class="emp-search-label">Período</div>
+        <div class="emp-date-row">
+          <span style="font-size:11px;color:var(--muted)">Desde</span>
+          <input type="date" class="date-in" id="empDesde" onchange="renderEmp()">
+          <span style="font-size:11px;color:var(--muted)">Hasta</span>
+          <input type="date" class="date-in" id="empHasta" onchange="renderEmp()">
+          <button class="btn-rst" onclick="empResetDates()">↺</button>
+        </div>
+      </div>
+      <div>
+        <div class="emp-search-label">Moneda</div>
+        <select class="fsel" id="empMoneda" onchange="renderEmp()">
+          <option value="ALL">Todas</option>
+        </select>
+      </div>
+      <div>
+        <div class="emp-search-label">Proyectar venc. al mes</div>
+        <input type="month" class="date-in" id="empMesProj" onchange="renderEmp()">
+      </div>
+    </div>
+  </div>
+
+  <main class="main" id="empMain">
+    <div class="emp-empty" id="empEmpty">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      Buscá una empresa para comenzar
+    </div>
+
+    <div id="empKpis" style="display:none">
+      <div class="emp-kpi-grid" id="empKpiGrid"></div>
+
+      <div class="row" id="empCmpRow">
+        <div class="card card-full">
+          <div class="card-hdr">
+            <span class="card-ttl" id="empCmpTtl">Comparativo de empresas</span>
+            <span class="card-sub">Ponderado por monto emitido</span>
+          </div>
+          <div class="tbl-wrap" style="max-height:none">
+            <table class="cmp-table">
+              <thead id="empCmpHead"></thead>
+              <tbody id="empCmpBody"></tbody>
+              <tfoot id="empCmpFoot"></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="row r2">
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-ttl">Vencimientos por Mes</span>
+            <span class="card-sub" id="empVncSub">Monto proyectado (fecha emisión + PPV)</span>
+          </div>
+          <div style="position:relative;height:280px"><canvas id="empCVenc"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-ttl">Distribución por Tramo</span>
+            <span class="card-sub">% del monto total por empresa</span>
+          </div>
+          <div id="empTramoWrap" style="padding:8px 0"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="card card-full">
+          <div class="card-hdr">
+            <span class="card-ttl">Detalle de Operaciones</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="text" id="empOpSearch" placeholder="Filtrar…"
+                style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;outline:none"
+                oninput="renderEmpOpTable()">
+              <span class="card-sub" id="empOpCount"></span>
+            </div>
+          </div>
+          <div class="tbl-wrap" style="max-height:360px">
+            <table>
+              <thead><tr>
+                <th>Empresa</th>
+                <th>Fecha Emisión</th>
+                <th>Instrumento</th>
+                <th>Moneda</th>
+                <th style="text-align:right">Monto</th>
+                <th style="text-align:right">TNA %</th>
+                <th style="text-align:center">Tramo</th>
+                <th style="text-align:right">PPV (días)</th>
+                <th>Vence (aprox.)</th>
+              </tr></thead>
+              <tbody id="empOpBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div><!-- /empKpis -->
+  </main>
+</div><!-- /sect-emp -->
 
 <script src="src/app.js"></script>
 </body>

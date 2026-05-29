@@ -67,7 +67,7 @@ async function loadAndRender() {
       showLoading('Procesando datos…');
       rawData = parseCSV(await res.text());
       if (!rawData.length) throw new Error('Sin filas válidas en el CSV.');
-      initFilters(); applyFilters(); hideLoading();
+      initFilters(); applyFilters(); initEmpTab(); hideLoading();
       return; // éxito
     } catch(e) {
       lastErr = e.message;
@@ -129,6 +129,7 @@ function parseCSV(text) {
     empresa:  idx['NOMBRE RESPONSABLE'] ?? 24,
     categoria:idx['CATEGORIA']        ?? 26,
     tramo:    idx['TRAMO']            ?? 27,
+    ppv:      idx['PPV']              ?? -1,
   };
 
   const result = [];
@@ -159,6 +160,7 @@ function parseCSV(text) {
       empresa:   (r[C.empresa]    || '').replace(/"/g,'').trim(),
       categoria: (r[C.categoria]  || '').replace(/"/g,'').trim(),
       tramo:     (r[C.tramo]      || '').replace(/"/g,'').trim(),
+      ppv:       C.ppv >= 0 ? parseArg(r[C.ppv]) : NaN,
     });
   }
   return result;
@@ -796,10 +798,11 @@ let rtAutoRefresh = null;
 // ── Tab switching ─────────────────────────────────────────────────────────────
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach((b,i) =>
-    b.classList.toggle('on', (i===0 && tab==='hist') || (i===1 && tab==='rt'))
+    b.classList.toggle('on', (i===0 && tab==='hist') || (i===1 && tab==='rt') || (i===2 && tab==='emp'))
   );
   document.getElementById('sect-hist').classList.toggle('on', tab==='hist');
   document.getElementById('sect-rt').classList.toggle('on', tab==='rt');
+  document.getElementById('sect-emp').classList.toggle('on', tab==='emp');
   if (tab==='rt' && !rtRawData.length) loadRT();
   if (tab==='rt' && !rtAutoRefresh) {
     rtAutoRefresh = setInterval(loadRT, 5 * 60 * 1000); // refresh c/5 min
@@ -1512,4 +1515,254 @@ function rtUpdBubble(d) {
       }
     }
   });
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PESTAÑA EMPRESAS
+// ══════════════════════════════════════════════════════════════════
+
+let empSelected  = [];
+let empAllNames  = [];
+let empChartVenc = null;
+let empOpRows    = [];
+const EMP_PALETTE = [
+  '#1A49C8','#E32D91','#7B1FAE','#22c55e','#f59e0b',
+  '#06b6d4','#ef4444','#84cc16','#8b5cf6','#f97316',
+];
+
+function initEmpTab() {
+  if (!rawData.length) return;
+  empAllNames = [...new Set(rawData.map(r => r.empresa).filter(Boolean))].sort();
+  const monSel = document.getElementById('empMoneda');
+  monSel.innerHTML = '<option value="ALL">Todas</option>';
+  [...new Set(rawData.map(r => r.moneda).filter(Boolean))].sort().forEach(m => {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = MON_LABELS[m] || m;
+    monSel.appendChild(o);
+  });
+  const dates = rawData.map(r => r.date).sort();
+  document.getElementById('empDesde').value = dates[0] || '';
+  document.getElementById('empHasta').value = dates[dates.length - 1] || '';
+  const now = new Date();
+  document.getElementById('empMesProj').value =
+    now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2,'0');
+  renderEmpDrop('');
+}
+
+function focusEmpInput() { document.getElementById('empTextIn').focus(); }
+function openEmpDrop()   { document.getElementById('empDd').classList.add('open'); }
+function closeEmpDrop()  { document.getElementById('empDd').classList.remove('open'); }
+function filterEmpDrop(q) { openEmpDrop(); renderEmpDrop(q); }
+
+function renderEmpDrop(q) {
+  const dd  = document.getElementById('empDd');
+  const lcq = q.toLowerCase();
+  const hits = empAllNames.filter(n => n.toLowerCase().includes(lcq));
+  if (!hits.length) { dd.innerHTML = '<div class="emp-dd-none">Sin coincidencias</div>'; return; }
+  dd.innerHTML = hits.map(n => {
+    const sel = empSelected.includes(n);
+    return `<div class="emp-dd-item ${sel?'sel':''}" onclick="toggleEmp('${n.replace(/'/g,"\\'")}')">
+      <input type="checkbox" ${sel?'checked':''} style="accent-color:var(--pri)"> ${n}
+    </div>`;
+  }).join('');
+}
+
+function toggleEmp(name) {
+  if (empSelected.includes(name)) empSelected = empSelected.filter(n => n !== name);
+  else empSelected.push(name);
+  renderEmpChips();
+  renderEmpDrop(document.getElementById('empTextIn').value);
+  renderEmp();
+}
+
+function renderEmpChips() {
+  const wrap = document.getElementById('empMultiInput');
+  wrap.querySelectorAll('.emp-chip2').forEach(c => c.remove());
+  const input = document.getElementById('empTextIn');
+  empSelected.forEach((n, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'emp-chip2';
+    chip.style.background = EMP_PALETTE[i % EMP_PALETTE.length] + '22';
+    chip.style.color       = EMP_PALETTE[i % EMP_PALETTE.length];
+    chip.innerHTML = `${n}<button onclick="toggleEmp('${n.replace(/'/g,"\\'")}')" title="Quitar">×</button>`;
+    wrap.insertBefore(chip, input);
+  });
+  input.placeholder = empSelected.length ? '' : 'Escribí para buscar…';
+}
+
+function renderEmp() {
+  const empty = document.getElementById('empEmpty');
+  const kpis  = document.getElementById('empKpis');
+  if (!empSelected.length) { empty.style.display = ''; kpis.style.display = 'none'; return; }
+  empty.style.display = 'none'; kpis.style.display = '';
+  const desde  = document.getElementById('empDesde').value;
+  const hasta  = document.getElementById('empHasta').value;
+  const moneda = document.getElementById('empMoneda').value;
+  const data = rawData.filter(r =>
+    empSelected.includes(r.empresa) &&
+    (!desde || r.date >= desde) &&
+    (!hasta || r.date <= hasta) &&
+    (moneda === 'ALL' || r.moneda === moneda)
+  );
+  renderEmpKpis(data);
+  renderEmpComparativo(data);
+  renderEmpVencimientos(data);
+  renderEmpTramos(data);
+  empOpRows = data;
+  renderEmpOpTable();
+}
+
+function renderEmpKpis(data) {
+  const grid = document.getElementById('empKpiGrid');
+  grid.innerHTML = '';
+  const totalMonto = data.reduce((s, r) => s + r.monto, 0);
+  const tasaPond   = data.reduce((s, r) => s + r.tasa * r.monto, 0) / (totalMonto || 1);
+  const nOps       = data.length;
+  const ppvD       = data.filter(r => !isNaN(r.ppv) && r.ppv > 0);
+  const ppvPond    = ppvD.reduce((s, r) => s + r.ppv * r.monto, 0) / (ppvD.reduce((s,r)=>s+r.monto,0)||1);
+  [
+    { lbl:'Monto Total',      val: fmtM(totalMonto), sub: `${nOps} operaciones`,          color:'#1A49C8' },
+    { lbl:'Tasa Pond. (TNA)', val: tasaPond.toFixed(2)+'%', sub:'ponderada por monto',    color:'#E32D91' },
+    { lbl:'PPV Pond.',        val: isFinite(ppvPond) ? Math.round(ppvPond)+' días' : '—', sub:'plazo ponderado por monto', color:'#7B1FAE' },
+    { lbl:'Empresas',         val: empSelected.length, sub: empSelected.length===1 ? empSelected[0].slice(0,30) : 'seleccionadas', color:'#22c55e' },
+  ].forEach(k => {
+    const d = document.createElement('div');
+    d.className = 'emp-kpi'; d.style.borderLeftColor = k.color;
+    d.innerHTML = `<div class="emp-kpi-lbl">${k.lbl}</div><div class="emp-kpi-val">${k.val}</div><div class="emp-kpi-sub">${k.sub}</div>`;
+    grid.appendChild(d);
+  });
+}
+
+function renderEmpComparativo(data) {
+  if (empSelected.length < 2) { document.getElementById('empCmpRow').style.display = 'none'; return; }
+  document.getElementById('empCmpRow').style.display = '';
+  document.getElementById('empCmpTtl').textContent = `Comparativo · ${empSelected.length} empresas seleccionadas`;
+  const tramos = [...new Set(data.map(r => r.tramo).filter(Boolean))].sort();
+  document.getElementById('empCmpHead').innerHTML = `<tr>
+    <th>Empresa</th><th>Monto Total</th><th>Tasa Pond.</th><th>PPV Pond.</th><th>Ops.</th>
+    ${tramos.map(t=>`<th>${t} d</th>`).join('')}
+  </tr>`;
+  const rows = empSelected.map((emp, i) => {
+    const ed = data.filter(r => r.empresa === emp);
+    const monto = ed.reduce((s,r)=>s+r.monto,0);
+    const tasa  = ed.reduce((s,r)=>s+r.tasa*r.monto,0)/(monto||1);
+    const ppvD  = ed.filter(r=>!isNaN(r.ppv)&&r.ppv>0);
+    const ppv   = ppvD.reduce((s,r)=>s+r.ppv*r.monto,0)/(ppvD.reduce((s,r)=>s+r.monto,0)||1);
+    const tm    = {};
+    tramos.forEach(t=>{ tm[t]=monto?ed.filter(r=>r.tramo===t).reduce((s,r)=>s+r.monto,0)/monto:0; });
+    return { emp, monto, tasa, ppv, ops:ed.length, tm, color:EMP_PALETTE[i%EMP_PALETTE.length] };
+  });
+  document.getElementById('empCmpBody').innerHTML = rows.map(r=>`<tr>
+    <td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};margin-right:6px"></span>${r.emp}</td>
+    <td>${fmtM(r.monto)}</td><td>${r.tasa.toFixed(2)}%</td>
+    <td>${isFinite(r.ppv)&&r.ppv>0?Math.round(r.ppv)+' d':'—'}</td><td>${r.ops}</td>
+    ${tramos.map(t=>`<td>${(r.tm[t]*100).toFixed(1)}%</td>`).join('')}
+  </tr>`).join('');
+  const tot = rows.reduce((s,r)=>s+r.monto,0);
+  const totT= rows.reduce((s,r)=>s+r.tasa*r.monto,0)/(tot||1);
+  const totP= rows.reduce((s,r)=>s+(isFinite(r.ppv)?r.ppv:0)*r.monto,0)/(tot||1);
+  const totTm={};
+  tramos.forEach(t=>{totTm[t]=rows.reduce((s,r)=>s+r.tm[t]*r.monto,0)/(tot||1);});
+  document.getElementById('empCmpFoot').innerHTML = `<tr>
+    <td>Promedio pond.</td><td>${fmtM(tot)}</td><td>${totT.toFixed(2)}%</td>
+    <td>${isFinite(totP)&&totP>0?Math.round(totP)+' d':'—'}</td><td>${rows.reduce((s,r)=>s+r.ops,0)}</td>
+    ${tramos.map(t=>`<td>${(totTm[t]*100).toFixed(1)}%</td>`).join('')}
+  </tr>`;
+}
+
+function renderEmpVencimientos(data) {
+  const mesProj = document.getElementById('empMesProj').value;
+  const byMes = {};
+  data.forEach(r => {
+    if (isNaN(r.ppv)||r.ppv<=0) return;
+    const vto = new Date(r.date+'T00:00:00');
+    vto.setDate(vto.getDate()+Math.round(r.ppv));
+    const k = vto.getFullYear()+'-'+String(vto.getMonth()+1).padStart(2,'0');
+    if (!byMes[k]) byMes[k]={};
+    byMes[k][r.empresa]=(byMes[k][r.empresa]||0)+r.monto;
+  });
+  const allMeses = Object.keys(byMes).sort();
+  if (!allMeses.length) { if (empChartVenc){empChartVenc.destroy();empChartVenc=null;} return; }
+  const mesMax = [allMeses[allMeses.length-1],mesProj].filter(Boolean).sort().pop();
+  const range=[];
+  let cur=new Date(allMeses[0]+'-01T00:00:00');
+  const end=new Date(mesMax+'-01T00:00:00');
+  while(cur<=end){ range.push(cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')); cur=new Date(cur.getFullYear(),cur.getMonth()+1,1); }
+  const datasets=empSelected.map((emp,i)=>({
+    label:emp, data:range.map(m=>(byMes[m]?.[emp]||0)/1e6),
+    backgroundColor:EMP_PALETTE[i%EMP_PALETTE.length]+'cc',
+    borderColor:EMP_PALETTE[i%EMP_PALETTE.length], borderWidth:1,
+  }));
+  if (empChartVenc) empChartVenc.destroy();
+  empChartVenc=new Chart(document.getElementById('empCVenc'),{
+    type:'bar', data:{labels:range,datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{boxWidth:10,font:{size:11}}},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(1)}M`}}},
+      scales:{
+        x:{stacked:empSelected.length>1,ticks:{font:{size:10},maxRotation:45},grid:{display:false}},
+        y:{stacked:empSelected.length>1,title:{display:true,text:'Monto (millones)',font:{size:11}},
+          ticks:{callback:v=>'$'+v+'M',font:{size:10}},grid:{color:'#f3f4f6'}},
+      }}
+  });
+  document.getElementById('empVncSub').textContent = mesProj
+    ? `Vence en ${mesProj}: ${fmtM(Object.values(byMes[mesProj]||{}).reduce((a,b)=>a+b,0))}`
+    : 'Monto proyectado (fecha emisión + PPV días)';
+}
+
+function renderEmpTramos(data) {
+  const wrap=document.getElementById('empTramoWrap');
+  wrap.innerHTML='';
+  if (empSelected.length===1) {
+    const total=data.reduce((s,r)=>s+r.monto,0);
+    const tm={};
+    data.forEach(r=>{tm[r.tramo]=(tm[r.tramo]||0)+r.monto;});
+    wrap.innerHTML='<div class="tramo-bar-wrap">'+
+      Object.entries(tm).sort((a,b)=>b[1]-a[1]).map(([t,m])=>{
+        const pct=total?(m/total*100):0;
+        return `<div class="tramo-bar-row">
+          <span class="tramo-bar-lbl">${t} d</span>
+          <div class="tramo-bar-bg"><div class="tramo-bar-fill" style="width:${pct.toFixed(1)}%;background:${TRAMO_COLORS[t]||'var(--pri)'}"></div></div>
+          <span class="tramo-bar-pct">${pct.toFixed(1)}%</span></div>`;
+      }).join('')+'</div>';
+  } else {
+    const tramosAll=[...new Set(data.map(r=>r.tramo).filter(Boolean))].sort();
+    wrap.innerHTML=empSelected.map((emp,i)=>{
+      const ed=data.filter(r=>r.empresa===emp);
+      const total=ed.reduce((s,r)=>s+r.monto,0);
+      return `<div style="margin-bottom:14px">
+        <div style="font-size:11px;font-weight:700;color:${EMP_PALETTE[i%EMP_PALETTE.length]};margin-bottom:5px">${emp}</div>
+        <div class="tramo-bar-wrap">`+
+        tramosAll.map(t=>{const m=ed.filter(r=>r.tramo===t).reduce((s,r)=>s+r.monto,0);const pct=total?m/total*100:0;
+          return `<div class="tramo-bar-row"><span class="tramo-bar-lbl">${t} d</span>
+            <div class="tramo-bar-bg"><div class="tramo-bar-fill" style="width:${pct.toFixed(1)}%;background:${EMP_PALETTE[i%EMP_PALETTE.length]}"></div></div>
+            <span class="tramo-bar-pct">${pct.toFixed(1)}%</span></div>`;
+        }).join('')+'</div></div>';
+    }).join('');
+  }
+}
+
+function renderEmpOpTable() {
+  const q=(document.getElementById('empOpSearch').value||'').toLowerCase();
+  const rows=empOpRows.filter(r=>!q||r.empresa.toLowerCase().includes(q)||r.tipo.toLowerCase().includes(q)||r.moneda.toLowerCase().includes(q)||(r.tramo||'').toLowerCase().includes(q)).sort((a,b)=>b.monto-a.monto);
+  document.getElementById('empOpCount').textContent=`${rows.length} operaciones`;
+  document.getElementById('empOpBody').innerHTML=rows.slice(0,500).map(r=>{
+    let vtoStr='—';
+    if (!isNaN(r.ppv)&&r.ppv>0){const v=new Date(r.date+'T00:00:00');v.setDate(v.getDate()+Math.round(r.ppv));vtoStr=v.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});}
+    const color=EMP_PALETTE[empSelected.indexOf(r.empresa)%EMP_PALETTE.length];
+    return `<tr>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>${r.empresa}</td>
+      <td>${r.date.split('-').reverse().join('/')}</td><td>${r.tipo}</td><td>${r.moneda}</td>
+      <td style="text-align:right">${fmtM(r.monto)}</td><td style="text-align:right">${r.tasa.toFixed(2)}%</td>
+      <td style="text-align:center"><span class="bcat" style="background:${(TRAMO_COLORS[r.tramo]||'#6b7280')+'22'};color:${TRAMO_COLORS[r.tramo]||'#6b7280'}">${r.tramo||'—'}</span></td>
+      <td style="text-align:right">${isNaN(r.ppv)||r.ppv<=0?'—':Math.round(r.ppv)}</td>
+      <td>${vtoStr}</td></tr>`;
+  }).join('');
+}
+
+function empResetDates() {
+  const dates=rawData.map(r=>r.date).sort();
+  document.getElementById('empDesde').value=dates[0]||'';
+  document.getElementById('empHasta').value=dates[dates.length-1]||'';
+  renderEmp();
 }

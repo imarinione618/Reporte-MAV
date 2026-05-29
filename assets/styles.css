@@ -169,3 +169,52 @@
   @media (max-width: 1100px) { .r2,.r-tri { grid-template-columns: 1fr; } }
   @media (max-width: 860px)  { .kpis,.r3 { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 560px)  { .kpis { grid-template-columns: 1fr; } .main { padding: 12px; } }
+
+  /* ── Pestaña Empresas ── */
+  .emp-search-box { background:var(--card); border-bottom:1px solid var(--border); padding:14px 24px; }
+  .emp-search-row { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+  .emp-search-label { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:6px; }
+  .emp-multi-wrap { position:relative; flex:1; min-width:280px; }
+  .emp-multi-input { display:flex; flex-wrap:wrap; gap:4px; align-items:center;
+    border:1px solid var(--border); border-radius:6px; padding:5px 8px;
+    background:var(--card); min-height:36px; cursor:text; }
+  .emp-multi-input:focus-within { border-color:var(--pri); }
+  .emp-chip2 { display:flex; align-items:center; gap:4px; padding:2px 9px;
+    border-radius:12px; font-size:11px; font-weight:600; white-space:nowrap; }
+  .emp-chip2 button { background:none; border:none; cursor:pointer; font-size:13px; line-height:1; padding:0; }
+  .emp-text-in { border:none; outline:none; background:transparent;
+    font-family:inherit; font-size:12px; color:var(--text); min-width:140px; flex:1; }
+  .emp-dd { position:absolute; top:calc(100% + 4px); left:0; right:0; z-index:100;
+    background:var(--card); border:1px solid var(--border); border-radius:8px;
+    box-shadow:0 4px 20px rgba(0,0,0,.12); max-height:240px; overflow-y:auto; display:none; }
+  .emp-dd.open { display:block; }
+  .emp-dd-item { padding:7px 12px; font-size:12px; cursor:pointer; display:flex; align-items:center; gap:8px; }
+  .emp-dd-item:hover { background:var(--bg); }
+  .emp-dd-item.sel { font-weight:700; color:var(--pri); }
+  .emp-dd-none { padding:12px; font-size:12px; color:var(--muted); text-align:center; }
+  .emp-date-row { display:flex; gap:8px; align-items:center; }
+  .emp-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; margin-bottom:18px; }
+  .emp-kpi { background:var(--card); border-radius:var(--radius); padding:14px 16px;
+    box-shadow:var(--shadow); border-left:4px solid var(--border); }
+  .emp-kpi-lbl { font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.5px; color:var(--muted); margin-bottom:4px; }
+  .emp-kpi-val { font-size:22px; font-weight:700; color:var(--text); }
+  .emp-kpi-sub { font-size:11px; color:var(--muted); margin-top:3px; }
+  .cmp-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .cmp-table thead th { background:#f8fafc; padding:7px 10px; text-align:right;
+    font-weight:600; color:var(--muted); border-bottom:1px solid var(--border); white-space:nowrap; }
+  .cmp-table thead th:first-child { text-align:left; }
+  .cmp-table tbody td { padding:7px 10px; border-bottom:1px solid #f3f4f6; text-align:right; }
+  .cmp-table tbody td:first-child { text-align:left; font-weight:600; }
+  .cmp-table tbody tr:hover td { background:var(--bg); }
+  .cmp-table tfoot td { padding:7px 10px; text-align:right; font-weight:700;
+    background:#f0f4f8; border-top:2px solid var(--border); font-size:12px; }
+  .cmp-table tfoot td:first-child { text-align:left; }
+  .tramo-bar-wrap { display:flex; flex-direction:column; gap:5px; }
+  .tramo-bar-row { display:flex; align-items:center; gap:8px; font-size:11px; }
+  .tramo-bar-lbl { min-width:56px; color:var(--muted); font-weight:600; }
+  .tramo-bar-bg  { flex:1; height:10px; background:#f3f4f6; border-radius:4px; overflow:hidden; }
+  .tramo-bar-fill { height:100%; border-radius:4px; background:var(--pri); transition:width .4s; }
+  .tramo-bar-pct { min-width:36px; text-align:right; color:var(--muted); }
+  .emp-empty { text-align:center; padding:60px 20px; color:var(--muted); font-size:13px; }
+  .emp-empty svg { display:block; margin:0 auto 14px; opacity:.3; }
