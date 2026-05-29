@@ -70,7 +70,7 @@ async function loadAndRender() {
       initFilters(); applyFilters(); initEmpTab(); hideLoading();
       return; // éxito
     } catch(e) {
-      lastErr = e.message;
+      lastErr = e.message + (e.stack ? '<br><code style="font-size:10px;opacity:.7">' + e.stack.split('\n').slice(0,3).join('<br>') + '</code>' : '');
     }
   }
   // Ambas URLs fallaron — mostrar error real
