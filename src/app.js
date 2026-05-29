@@ -676,9 +676,9 @@ const SEG_ORDER_INSTR = ['Avalado', 'No Garantizado', 'Garantizado'];
 
 function instrMatch(tipo) {
   const t = (tipo || '').toLowerCase();
-  if (F_inst === 'CPD') return t.includes('cpd') || t.includes('cheque');
   if (F_inst === 'PAG') return t.includes('pagar');
   if (F_inst === 'FCE') return t.includes('fce');
+  if (F_inst === 'CPD') return !t.includes('pagar') && !t.includes('fce'); // catch-all
   return true; // ALL
 }
 
@@ -1690,9 +1690,9 @@ function renderEmp() {
   const allEmps = [empMain, ...empCmpList];
   const empInstrMatch = tipo => {
     const t = (tipo || '').toLowerCase();
-    if (empInstrFilter === 'CPD') return t.includes('cpd') || t.includes('cheque');
     if (empInstrFilter === 'PAG') return t.includes('pagar');
     if (empInstrFilter === 'FCE') return t.includes('fce');
+    if (empInstrFilter === 'CPD') return !t.includes('pagar') && !t.includes('fce'); // catch-all
     return true;
   };
   const data = rawData.filter(r =>
