@@ -486,9 +486,18 @@
       <!-- Moneda -->
       <div>
         <div class="emp-search-label">Moneda</div>
-        <select class="fsel" id="empMoneda" onchange="renderEmp()">
-          <option value="ALL">Todas</option>
-        </select>
+        <div class="mon-wrap" id="empMonWrap"></div>
+      </div>
+
+      <!-- Instrumento -->
+      <div>
+        <div class="emp-search-label">Instrumento</div>
+        <div class="instr-toggle" id="empInstrToggle">
+          <button class="instr-btn on" data-inst="ALL" onclick="setEmpInstr(this)">Todos</button>
+          <button class="instr-btn"   data-inst="CPD" onclick="setEmpInstr(this)">Cheques</button>
+          <button class="instr-btn"   data-inst="PAG" onclick="setEmpInstr(this)">Pagaré</button>
+          <button class="instr-btn"   data-inst="FCE" onclick="setEmpInstr(this)">FCE</button>
+        </div>
       </div>
 
       <!-- Mes proyección -->
@@ -560,12 +569,6 @@
         <div class="card card-full">
           <div class="card-hdr">
             <span class="card-ttl">Resumen por Instrumento</span>
-            <div class="instr-toggle">
-              <button class="instr-btn on" data-inst="ALL" onclick="setEmpInstr(this)">Todos</button>
-              <button class="instr-btn"   data-inst="CPD" onclick="setEmpInstr(this)">Cheques</button>
-              <button class="instr-btn"   data-inst="PAG" onclick="setEmpInstr(this)">Pagaré</button>
-              <button class="instr-btn"   data-inst="FCE" onclick="setEmpInstr(this)">FCE</button>
-            </div>
           </div>
           <div class="tbl-wrap" style="max-height:340px">
             <table>

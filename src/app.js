@@ -1530,6 +1530,7 @@ let empChartPieInst = null;
 let empChartPieTasa = null;
 let empOpRows    = [];
 let empInstrFilter = 'ALL';
+let empMonedas   = [];     // [] = todas; igual que F.monedas en Histórico
 
 const EMP_PALETTE = [
   '#1A49C8','#E32D91','#7B1FAE','#22c55e','#f59e0b',
@@ -1541,13 +1542,21 @@ const EMP_MAIN_COLOR = '#1A49C8';
 function initEmpTab() {
   if (!rawData.length) return;
   empAllNames = [...new Set(rawData.map(r => r.empresa).filter(Boolean))].sort();
-  const monSel = document.getElementById('empMoneda');
-  monSel.innerHTML = '<option value="ALL">Todas</option>';
-  [...new Set(rawData.map(r => r.moneda).filter(Boolean))].sort().forEach(m => {
-    const o = document.createElement('option');
-    o.value = m; o.textContent = MON_LABELS[m] || m;
-    monSel.appendChild(o);
+
+  // Moneda buttons (multi-select, igual que Histórico)
+  const monedas = [...new Set(rawData.map(r => r.moneda).filter(Boolean))].sort();
+  if (!empMonedas.length) empMonedas = [monedas.includes('$') ? '$' : monedas[0]];
+  const wrap = document.getElementById('empMonWrap');
+  wrap.innerHTML = '';
+  monedas.forEach(m => {
+    const b = document.createElement('button');
+    b.className = 'mon-btn' + (empMonedas.includes(m) ? ' on' : '');
+    b.dataset.v = m;
+    b.textContent = MON_LABELS[m] || m;
+    b.onclick = function() { empSetMon(this); };
+    wrap.appendChild(b);
   });
+
   const dates = rawData.map(r => r.date).sort();
   document.getElementById('empDesde').value = dates[0] || '';
   document.getElementById('empHasta').value = dates[dates.length - 1] || '';
@@ -1556,6 +1565,17 @@ function initEmpTab() {
     now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2,'0');
   renderEmpMainDrop('');
   renderEmpCmpDrop('');
+}
+
+function empSetMon(btn) {
+  const v = btn.dataset.v;
+  const i = empMonedas.indexOf(v);
+  if (i >= 0) { if (empMonedas.length > 1) empMonedas.splice(i, 1); }
+  else empMonedas.push(v);
+  document.querySelectorAll('#empMonWrap .mon-btn').forEach(b =>
+    b.classList.toggle('on', empMonedas.includes(b.dataset.v))
+  );
+  renderEmp();
 }
 
 // ── Dropdown empresa principal (single select) ─────────────────────
@@ -1648,13 +1668,11 @@ function renderEmpCmpChips() {
 
 // ── Filtro instrumento ──────────────────────────────────────────────
 function setEmpInstr(btn) {
-  document.querySelectorAll('#empTInstr').forEach(() => {});
-  document.querySelectorAll('.instr-btn').forEach(b => {
-    // Solo aplica a los botones del card de instrumentos de la pestaña Empresas
-    if (b.closest('#sect-emp')) b.classList.toggle('on', b === btn);
-  });
+  document.querySelectorAll('#empInstrToggle .instr-btn').forEach(b =>
+    b.classList.toggle('on', b === btn)
+  );
   empInstrFilter = btn.dataset.inst;
-  renderEmpInstr(_empLastData);
+  renderEmp();
 }
 
 // ── Render principal ────────────────────────────────────────────────
@@ -1668,14 +1686,21 @@ function renderEmp() {
 
   const desde  = document.getElementById('empDesde').value;
   const hasta  = document.getElementById('empHasta').value;
-  const moneda = document.getElementById('empMoneda').value;
 
   const allEmps = [empMain, ...empCmpList];
+  const empInstrMatch = tipo => {
+    const t = (tipo || '').toLowerCase();
+    if (empInstrFilter === 'CPD') return t.includes('cpd') || t.includes('cheque');
+    if (empInstrFilter === 'PAG') return t.includes('pagar');
+    if (empInstrFilter === 'FCE') return t.includes('fce');
+    return true;
+  };
   const data = rawData.filter(r =>
     allEmps.includes(r.empresa) &&
     (!desde || r.date >= desde) &&
     (!hasta || r.date <= hasta) &&
-    (moneda === 'ALL' || r.moneda === moneda)
+    (!empMonedas.length || empMonedas.includes(r.moneda)) &&
+    empInstrMatch(r.tipo)
   );
   _empLastData = data;
 
@@ -1727,7 +1752,8 @@ function renderEmpComparativo(data) {
   row.style.display = '';
 
   const allEmps = [empMain, ...empCmpList];
-  const tramos  = [...new Set(data.map(r=>r.tramo).filter(Boolean))].sort();
+  const tramos  = [...new Set(data.map(r=>r.tramo).filter(Boolean))]
+    .sort((a,b) => parseInt(a) - parseInt(b));
 
   document.getElementById('empCmpTtl').textContent =
     `${empMain} vs. ${empCmpList.length > 1 ? empCmpList.length+' empresas' : empCmpList[0]}`;
@@ -1794,16 +1820,10 @@ function renderEmpPies(data) {
   empChartPieInst = makePie('empCPieInst', instLabels, instData, instColors);
 }
 
-// ── Resumen por instrumento (reutiliza lógica de Histórico) ─────────
+// ── Resumen por instrumento ─────────────────────────────────────────
 function renderEmpInstr(data) {
-  const empInstrMatch = tipo => {
-    const t = (tipo || '').toLowerCase();
-    if (empInstrFilter === 'CPD') return t.includes('cpd') || t.includes('cheque');
-    if (empInstrFilter === 'PAG') return t.includes('pagar');
-    if (empInstrFilter === 'FCE') return t.includes('fce');
-    return true;
-  };
-  const rows = empInstrFilter === 'ALL' ? data : data.filter(r => empInstrMatch(r.tipo));
+  // El filtro de instrumento ya fue aplicado en renderEmp(); data ya está filtrado.
+  const rows = data;
   const m = {};
   rows.forEach(r => {
     const seg = r.segmento || 'Sin segmento';
