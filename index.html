@@ -173,13 +173,13 @@
     </div>
   </div>
 
-  <div class="row r3">
-    <div class="card">
+  <div class="row r3" style="align-items:stretch">
+    <div class="card" style="display:flex;flex-direction:column">
       <div class="card-hdr">
         <span class="card-ttl">Montos Negociados por Día</span>
         <span class="card-sub" id="montSub">Total operado</span>
       </div>
-      <div style="position:relative;height:280px"><canvas id="cMontos"></canvas></div>
+      <div style="position:relative;flex:1;min-height:220px"><canvas id="cMontos"></canvas></div>
     </div>
     <div class="card">
       <div class="card-hdr">
@@ -440,19 +440,38 @@
   <!-- Barra de búsqueda -->
   <div class="emp-search-box">
     <div class="emp-search-row">
-      <div style="flex:1;min-width:280px">
-        <div class="emp-search-label">Buscar empresa(s)</div>
-        <div class="emp-multi-wrap" id="empMultiWrap">
-          <div class="emp-multi-input" id="empMultiInput" onclick="focusEmpInput()">
-            <input type="text" class="emp-text-in" id="empTextIn"
-              placeholder="Escribí para buscar…"
-              oninput="filterEmpDrop(this.value)"
-              onfocus="openEmpDrop()"
-              onblur="setTimeout(closeEmpDrop,200)">
+
+      <!-- Empresa principal -->
+      <div style="flex:1;min-width:240px">
+        <div class="emp-search-label">Empresa principal</div>
+        <div class="emp-multi-wrap" id="empMainWrap">
+          <div class="emp-multi-input" id="empMainInput" onclick="focusEmpMainInput()">
+            <input type="text" class="emp-text-in" id="empMainTextIn"
+              placeholder="Buscar empresa…"
+              oninput="filterEmpMainDrop(this.value)"
+              onfocus="openEmpMainDrop()"
+              onblur="setTimeout(closeEmpMainDrop,200)">
           </div>
-          <div class="emp-dd" id="empDd"></div>
+          <div class="emp-dd" id="empMainDd"></div>
         </div>
       </div>
+
+      <!-- Empresas a comparar -->
+      <div style="flex:1;min-width:240px">
+        <div class="emp-search-label">Comparar con…</div>
+        <div class="emp-multi-wrap" id="empCmpWrap">
+          <div class="emp-multi-input" id="empCmpInput" onclick="focusEmpCmpInput()">
+            <input type="text" class="emp-text-in" id="empCmpTextIn"
+              placeholder="Agregar empresas…"
+              oninput="filterEmpCmpDrop(this.value)"
+              onfocus="openEmpCmpDrop()"
+              onblur="setTimeout(closeEmpCmpDrop,200)">
+          </div>
+          <div class="emp-dd" id="empCmpDd"></div>
+        </div>
+      </div>
+
+      <!-- Período -->
       <div>
         <div class="emp-search-label">Período</div>
         <div class="emp-date-row">
@@ -463,16 +482,21 @@
           <button class="btn-rst" onclick="empResetDates()">↺</button>
         </div>
       </div>
+
+      <!-- Moneda -->
       <div>
         <div class="emp-search-label">Moneda</div>
         <select class="fsel" id="empMoneda" onchange="renderEmp()">
           <option value="ALL">Todas</option>
         </select>
       </div>
+
+      <!-- Mes proyección -->
       <div>
         <div class="emp-search-label">Proyectar venc. al mes</div>
         <input type="month" class="date-in" id="empMesProj" onchange="renderEmp()">
       </div>
+
     </div>
   </div>
 
@@ -485,13 +509,16 @@
     </div>
 
     <div id="empKpis" style="display:none">
+
+      <!-- KPI cards -->
       <div class="emp-kpi-grid" id="empKpiGrid"></div>
 
-      <div class="row" id="empCmpRow">
+      <!-- Tabla comparativa (aparece cuando hay empresas a comparar) -->
+      <div class="row" id="empCmpRow" style="display:none">
         <div class="card card-full">
           <div class="card-hdr">
-            <span class="card-ttl" id="empCmpTtl">Comparativo de empresas</span>
-            <span class="card-sub">Ponderado por monto emitido</span>
+            <span class="card-ttl" id="empCmpTtl">Comparativo</span>
+            <span class="card-sub">Promedio ponderado por monto de las empresas de comparación</span>
           </div>
           <div class="tbl-wrap" style="max-height:none">
             <table class="cmp-table">
@@ -503,6 +530,60 @@
         </div>
       </div>
 
+      <!-- Pies: moneda + instrumento + tramo -->
+      <div class="row r-tri">
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-ttl">Por Moneda</span>
+            <span class="card-sub">% sobre monto total</span>
+          </div>
+          <div class="pie-wrap"><canvas id="empCPieMon"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-ttl">Por Instrumento</span>
+            <span class="card-sub">% sobre monto total</span>
+          </div>
+          <div class="pie-wrap"><canvas id="empCPieInst"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-ttl">Distribución por Tramo</span>
+            <span class="card-sub">% del monto total</span>
+          </div>
+          <div id="empTramoWrap" style="padding:8px 0"></div>
+        </div>
+      </div>
+
+      <!-- Resumen por Instrumento -->
+      <div class="row">
+        <div class="card card-full">
+          <div class="card-hdr">
+            <span class="card-ttl">Resumen por Instrumento</span>
+            <div class="instr-toggle">
+              <button class="instr-btn on" data-inst="ALL" onclick="setEmpInstr(this)">Todos</button>
+              <button class="instr-btn"   data-inst="CPD" onclick="setEmpInstr(this)">Cheques</button>
+              <button class="instr-btn"   data-inst="PAG" onclick="setEmpInstr(this)">Pagaré</button>
+              <button class="instr-btn"   data-inst="FCE" onclick="setEmpInstr(this)">FCE</button>
+            </div>
+          </div>
+          <div class="tbl-wrap" style="max-height:340px">
+            <table>
+              <thead><tr>
+                <th style="min-width:180px">Segmento / Moneda</th>
+                <th style="text-align:right">Monto Nominal</th>
+                <th style="text-align:center">Tramo Mayor Vol.</th>
+                <th style="text-align:right">TEA</th>
+                <th style="text-align:right">TEM</th>
+                <th style="text-align:right">TNA</th>
+              </tr></thead>
+              <tbody id="empTInstr"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vencimientos por mes -->
       <div class="row r2">
         <div class="card">
           <div class="card-hdr">
@@ -511,15 +592,16 @@
           </div>
           <div style="position:relative;height:280px"><canvas id="empCVenc"></canvas></div>
         </div>
-        <div class="card">
+        <div class="card" style="display:none" id="empCmpPieCard">
           <div class="card-hdr">
-            <span class="card-ttl">Distribución por Tramo</span>
-            <span class="card-sub">% del monto total por empresa</span>
+            <span class="card-ttl">Comparación de Tasas</span>
+            <span class="card-sub">TNA ponderada por empresa</span>
           </div>
-          <div id="empTramoWrap" style="padding:8px 0"></div>
+          <div class="pie-wrap"><canvas id="empCPieTasa"></canvas></div>
         </div>
       </div>
 
+      <!-- Tabla detalle operaciones -->
       <div class="row">
         <div class="card card-full">
           <div class="card-hdr">
@@ -549,6 +631,7 @@
           </div>
         </div>
       </div>
+
     </div><!-- /empKpis -->
   </main>
 </div><!-- /sect-emp -->

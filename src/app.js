@@ -431,21 +431,21 @@ function updMontos(d) {
     type:'bar',
     data:{
       labels,
-      datasets:[{label:'Monto diario', data:sorted.map(([,v])=>+(v/1e6).toFixed(2)),
+      datasets:[{label:'Monto diario', data:sorted.map(([,v])=>+(v/1e9).toFixed(3)),
                  backgroundColor:'rgba(26,73,200,.45)',borderColor:'#1A49C8',
                  borderWidth:1,borderRadius:3}]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false},
-               tooltip:{callbacks:{label:ctx=>' '+ctx.raw.toLocaleString('es-AR')+' M'}}},
+               tooltip:{callbacks:{label:ctx=>' '+ctx.raw.toFixed(1)+' MM'}}},
       scales:{
         x:{type:'category',
            grid:{display:false},
            ticks:{font:{size:10}, maxRotation:45, autoSkip:true, maxTicksLimit:20}},
         y:{grid:{color:'#f3f4f6'},
-           ticks:{callback:v=>v>=1000?(v/1000).toFixed(0)+' B':v+' M',font:{size:10}},
-           title:{display:true,text:'Millones',font:{size:11}}}
+           ticks:{callback:v=>v.toFixed(0)+' MM',font:{size:10}},
+           title:{display:true,text:'Miles de millones ($)',font:{size:11}}}
       }
     }
   });
@@ -1099,7 +1099,7 @@ function rtUpdMontos(d) {
       labels: sorted.map(([h])=>h),
       datasets: [{
         label: 'Monto',
-        data: sorted.map(([,v]) => +(v/1e6).toFixed(2)),
+        data: sorted.map(([,v]) => +(v/1e9).toFixed(3)),
         backgroundColor: 'rgba(26,73,200,.45)', borderColor:'#1A49C8',
         borderWidth:1, borderRadius:3
       }]
@@ -1107,12 +1107,12 @@ function rtUpdMontos(d) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend:{display:false},
-        tooltip:{callbacks:{label:ctx=>` ${ctx.raw.toLocaleString('es-AR')} M`}} },
+        tooltip:{callbacks:{label:ctx=>` ${ctx.raw.toFixed(1)} MM`}} },
       scales: {
         x: { type:'category', grid:{display:false}, ticks:{font:{size:10}} },
         y: { grid:{color:'#f3f4f6'},
-          ticks:{callback:v=>v>=1000?(v/1000).toFixed(0)+' B':v+' M',font:{size:10}},
-          title:{display:true,text:'Millones',font:{size:10}} }
+          ticks:{callback:v=>v.toFixed(0)+' MM',font:{size:10}},
+          title:{display:true,text:'Miles de millones ($)',font:{size:10}} }
       }
     }
   });
@@ -1521,15 +1521,23 @@ function rtUpdBubble(d) {
 //  PESTAÑA EMPRESAS
 // ══════════════════════════════════════════════════════════════════
 
-let empSelected  = [];
+let empMain      = null;   // empresa principal (string o null)
+let empCmpList   = [];     // empresas de comparación (array)
 let empAllNames  = [];
 let empChartVenc = null;
+let empChartPieMon  = null;
+let empChartPieInst = null;
+let empChartPieTasa = null;
 let empOpRows    = [];
+let empInstrFilter = 'ALL';
+
 const EMP_PALETTE = [
   '#1A49C8','#E32D91','#7B1FAE','#22c55e','#f59e0b',
   '#06b6d4','#ef4444','#84cc16','#8b5cf6','#f97316',
 ];
+const EMP_MAIN_COLOR = '#1A49C8';
 
+// ── Init ──────────────────────────────────────────────────────────
 function initEmpTab() {
   if (!rawData.length) return;
   empAllNames = [...new Set(rawData.map(r => r.empresa).filter(Boolean))].sort();
@@ -1546,86 +1554,165 @@ function initEmpTab() {
   const now = new Date();
   document.getElementById('empMesProj').value =
     now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2,'0');
-  renderEmpDrop('');
+  renderEmpMainDrop('');
+  renderEmpCmpDrop('');
 }
 
-function focusEmpInput() { document.getElementById('empTextIn').focus(); }
-function openEmpDrop()   { document.getElementById('empDd').classList.add('open'); }
-function closeEmpDrop()  { document.getElementById('empDd').classList.remove('open'); }
-function filterEmpDrop(q) { openEmpDrop(); renderEmpDrop(q); }
+// ── Dropdown empresa principal (single select) ─────────────────────
+function focusEmpMainInput() { document.getElementById('empMainTextIn').focus(); }
+function openEmpMainDrop()   { document.getElementById('empMainDd').classList.add('open'); }
+function closeEmpMainDrop()  { document.getElementById('empMainDd').classList.remove('open'); }
+function filterEmpMainDrop(q){ openEmpMainDrop(); renderEmpMainDrop(q); }
 
-function renderEmpDrop(q) {
-  const dd  = document.getElementById('empDd');
+function renderEmpMainDrop(q) {
+  const dd  = document.getElementById('empMainDd');
   const lcq = q.toLowerCase();
   const hits = empAllNames.filter(n => n.toLowerCase().includes(lcq));
   if (!hits.length) { dd.innerHTML = '<div class="emp-dd-none">Sin coincidencias</div>'; return; }
   dd.innerHTML = hits.map(n => {
-    const sel = empSelected.includes(n);
-    return `<div class="emp-dd-item ${sel?'sel':''}" onclick="toggleEmp('${n.replace(/'/g,"\\'")}')">
+    const sel = empMain === n;
+    return `<div class="emp-dd-item ${sel?'sel':''}" onclick="selectEmpMain('${n.replace(/'/g,"\\'")}')">
+      ${sel ? '✓ ' : ''} ${n}
+    </div>`;
+  }).join('');
+}
+
+function selectEmpMain(name) {
+  empMain = empMain === name ? null : name;
+  // Quitar de comparación si estaba ahí
+  empCmpList = empCmpList.filter(n => n !== name);
+  renderEmpMainChip();
+  renderEmpCmpChips();
+  renderEmpMainDrop(document.getElementById('empMainTextIn').value);
+  renderEmpCmpDrop(document.getElementById('empCmpTextIn').value);
+  renderEmp();
+}
+
+function renderEmpMainChip() {
+  const wrap  = document.getElementById('empMainInput');
+  const input = document.getElementById('empMainTextIn');
+  wrap.querySelectorAll('.emp-chip2').forEach(c => c.remove());
+  if (empMain) {
+    const chip = document.createElement('div');
+    chip.className = 'emp-chip2';
+    chip.style.background = EMP_MAIN_COLOR + '22';
+    chip.style.color       = EMP_MAIN_COLOR;
+    chip.innerHTML = `${empMain}<button onclick="selectEmpMain('${empMain.replace(/'/g,"\\'")}')" title="Quitar">×</button>`;
+    wrap.insertBefore(chip, input);
+  }
+  input.placeholder = empMain ? '' : 'Buscar empresa…';
+}
+
+// ── Dropdown empresas de comparación (multi select) ────────────────
+function focusEmpCmpInput() { document.getElementById('empCmpTextIn').focus(); }
+function openEmpCmpDrop()   { document.getElementById('empCmpDd').classList.add('open'); }
+function closeEmpCmpDrop()  { document.getElementById('empCmpDd').classList.remove('open'); }
+function filterEmpCmpDrop(q){ openEmpCmpDrop(); renderEmpCmpDrop(q); }
+
+function renderEmpCmpDrop(q) {
+  const dd  = document.getElementById('empCmpDd');
+  const lcq = q.toLowerCase();
+  // Excluir la empresa principal del listado de comparación
+  const hits = empAllNames.filter(n => n !== empMain && n.toLowerCase().includes(lcq));
+  if (!hits.length) { dd.innerHTML = '<div class="emp-dd-none">Sin coincidencias</div>'; return; }
+  dd.innerHTML = hits.map(n => {
+    const sel = empCmpList.includes(n);
+    return `<div class="emp-dd-item ${sel?'sel':''}" onclick="toggleEmpCmp('${n.replace(/'/g,"\\'")}')">
       <input type="checkbox" ${sel?'checked':''} style="accent-color:var(--pri)"> ${n}
     </div>`;
   }).join('');
 }
 
-function toggleEmp(name) {
-  if (empSelected.includes(name)) empSelected = empSelected.filter(n => n !== name);
-  else empSelected.push(name);
-  renderEmpChips();
-  renderEmpDrop(document.getElementById('empTextIn').value);
+function toggleEmpCmp(name) {
+  if (empCmpList.includes(name)) empCmpList = empCmpList.filter(n => n !== name);
+  else empCmpList.push(name);
+  renderEmpCmpChips();
+  renderEmpCmpDrop(document.getElementById('empCmpTextIn').value);
   renderEmp();
 }
 
-function renderEmpChips() {
-  const wrap = document.getElementById('empMultiInput');
+function renderEmpCmpChips() {
+  const wrap  = document.getElementById('empCmpInput');
+  const input = document.getElementById('empCmpTextIn');
   wrap.querySelectorAll('.emp-chip2').forEach(c => c.remove());
-  const input = document.getElementById('empTextIn');
-  empSelected.forEach((n, i) => {
+  empCmpList.forEach((n, i) => {
     const chip = document.createElement('div');
     chip.className = 'emp-chip2';
-    chip.style.background = EMP_PALETTE[i % EMP_PALETTE.length] + '22';
-    chip.style.color       = EMP_PALETTE[i % EMP_PALETTE.length];
-    chip.innerHTML = `${n}<button onclick="toggleEmp('${n.replace(/'/g,"\\'")}')" title="Quitar">×</button>`;
+    chip.style.background = EMP_PALETTE[(i + 1) % EMP_PALETTE.length] + '22';
+    chip.style.color       = EMP_PALETTE[(i + 1) % EMP_PALETTE.length];
+    chip.innerHTML = `${n}<button onclick="toggleEmpCmp('${n.replace(/'/g,"\\'")}')" title="Quitar">×</button>`;
     wrap.insertBefore(chip, input);
   });
-  input.placeholder = empSelected.length ? '' : 'Escribí para buscar…';
+  input.placeholder = empCmpList.length ? '' : 'Agregar empresas…';
 }
+
+// ── Filtro instrumento ──────────────────────────────────────────────
+function setEmpInstr(btn) {
+  document.querySelectorAll('#empTInstr').forEach(() => {});
+  document.querySelectorAll('.instr-btn').forEach(b => {
+    // Solo aplica a los botones del card de instrumentos de la pestaña Empresas
+    if (b.closest('#sect-emp')) b.classList.toggle('on', b === btn);
+  });
+  empInstrFilter = btn.dataset.inst;
+  renderEmpInstr(_empLastData);
+}
+
+// ── Render principal ────────────────────────────────────────────────
+let _empLastData = [];
 
 function renderEmp() {
   const empty = document.getElementById('empEmpty');
   const kpis  = document.getElementById('empKpis');
-  if (!empSelected.length) { empty.style.display = ''; kpis.style.display = 'none'; return; }
+  if (!empMain) { empty.style.display = ''; kpis.style.display = 'none'; return; }
   empty.style.display = 'none'; kpis.style.display = '';
+
   const desde  = document.getElementById('empDesde').value;
   const hasta  = document.getElementById('empHasta').value;
   const moneda = document.getElementById('empMoneda').value;
+
+  const allEmps = [empMain, ...empCmpList];
   const data = rawData.filter(r =>
-    empSelected.includes(r.empresa) &&
+    allEmps.includes(r.empresa) &&
     (!desde || r.date >= desde) &&
     (!hasta || r.date <= hasta) &&
     (moneda === 'ALL' || r.moneda === moneda)
   );
-  renderEmpKpis(data);
+  _empLastData = data;
+
+  const mainData = data.filter(r => r.empresa === empMain);
+  const cmpData  = data.filter(r => empCmpList.includes(r.empresa));
+
+  renderEmpKpis(mainData, cmpData);
   renderEmpComparativo(data);
+  renderEmpPies(mainData);
+  renderEmpInstr(data);
   renderEmpVencimientos(data);
-  renderEmpTramos(data);
+  renderEmpTramos(mainData);
   empOpRows = data;
   renderEmpOpTable();
 }
 
-function renderEmpKpis(data) {
+// ── KPI cards (empresa principal) ──────────────────────────────────
+function renderEmpKpis(mainData, cmpData) {
   const grid = document.getElementById('empKpiGrid');
   grid.innerHTML = '';
-  const totalMonto = data.reduce((s, r) => s + r.monto, 0);
-  const tasaPond   = data.reduce((s, r) => s + r.tasa * r.monto, 0) / (totalMonto || 1);
-  const nOps       = data.length;
-  const ppvD       = data.filter(r => !isNaN(r.ppv) && r.ppv > 0);
-  const ppvPond    = ppvD.reduce((s, r) => s + r.ppv * r.monto, 0) / (ppvD.reduce((s,r)=>s+r.monto,0)||1);
-  [
-    { lbl:'Monto Total',      val: fmtM(totalMonto), sub: `${nOps} operaciones`,          color:'#1A49C8' },
-    { lbl:'Tasa Pond. (TNA)', val: tasaPond.toFixed(2)+'%', sub:'ponderada por monto',    color:'#E32D91' },
-    { lbl:'PPV Pond.',        val: isFinite(ppvPond) ? Math.round(ppvPond)+' días' : '—', sub:'plazo ponderado por monto', color:'#7B1FAE' },
-    { lbl:'Empresas',         val: empSelected.length, sub: empSelected.length===1 ? empSelected[0].slice(0,30) : 'seleccionadas', color:'#22c55e' },
-  ].forEach(k => {
+  const m = mainData.reduce((s,r)=>s+r.monto,0);
+  const t = mainData.reduce((s,r)=>s+r.tasa*r.monto,0)/(m||1);
+  const ppvD = mainData.filter(r=>!isNaN(r.ppv)&&r.ppv>0);
+  const p = ppvD.reduce((s,r)=>s+r.ppv*r.monto,0)/(ppvD.reduce((s,r)=>s+r.monto,0)||1);
+  // Promedio ponderado de las empresas de comparación
+  const cm = cmpData.reduce((s,r)=>s+r.monto,0);
+  const ct = cmpData.reduce((s,r)=>s+r.tasa*r.monto,0)/(cm||1);
+
+  const cards = [
+    { lbl:'Monto Total',         val: fmtM(m),                                       sub: `${mainData.length} operaciones`,          color: EMP_MAIN_COLOR },
+    { lbl:'Tasa Pond. (TNA)',    val: t.toFixed(2)+'%',                              sub: 'ponderada por monto',                    color: '#E32D91'      },
+    { lbl:'PPV Pond.',           val: isFinite(p)?Math.round(p)+' días':'—',         sub: 'plazo ponderado por monto',              color: '#7B1FAE'      },
+  ];
+  if (empCmpList.length) {
+    cards.push({ lbl:'Tasa Pond. comparación', val: cm>0?ct.toFixed(2)+'%':'—', sub: `promedio de ${empCmpList.length} empresa${empCmpList.length>1?'s':''}`, color:'#22c55e' });
+  }
+  cards.forEach(k => {
     const d = document.createElement('div');
     d.className = 'emp-kpi'; d.style.borderLeftColor = k.color;
     d.innerHTML = `<div class="emp-kpi-lbl">${k.lbl}</div><div class="emp-kpi-val">${k.val}</div><div class="emp-kpi-sub">${k.sub}</div>`;
@@ -1633,45 +1720,126 @@ function renderEmpKpis(data) {
   });
 }
 
+// ── Tabla comparativa ────────────────────────────────────────────────
 function renderEmpComparativo(data) {
-  if (empSelected.length < 2) { document.getElementById('empCmpRow').style.display = 'none'; return; }
-  document.getElementById('empCmpRow').style.display = '';
-  document.getElementById('empCmpTtl').textContent = `Comparativo · ${empSelected.length} empresas seleccionadas`;
-  const tramos = [...new Set(data.map(r => r.tramo).filter(Boolean))].sort();
+  const row = document.getElementById('empCmpRow');
+  if (!empCmpList.length) { row.style.display = 'none'; return; }
+  row.style.display = '';
+
+  const allEmps = [empMain, ...empCmpList];
+  const tramos  = [...new Set(data.map(r=>r.tramo).filter(Boolean))].sort();
+
+  document.getElementById('empCmpTtl').textContent =
+    `${empMain} vs. ${empCmpList.length > 1 ? empCmpList.length+' empresas' : empCmpList[0]}`;
   document.getElementById('empCmpHead').innerHTML = `<tr>
     <th>Empresa</th><th>Monto Total</th><th>Tasa Pond.</th><th>PPV Pond.</th><th>Ops.</th>
     ${tramos.map(t=>`<th>${t} d</th>`).join('')}
   </tr>`;
-  const rows = empSelected.map((emp, i) => {
-    const ed = data.filter(r => r.empresa === emp);
-    const monto = ed.reduce((s,r)=>s+r.monto,0);
-    const tasa  = ed.reduce((s,r)=>s+r.tasa*r.monto,0)/(monto||1);
-    const ppvD  = ed.filter(r=>!isNaN(r.ppv)&&r.ppv>0);
-    const ppv   = ppvD.reduce((s,r)=>s+r.ppv*r.monto,0)/(ppvD.reduce((s,r)=>s+r.monto,0)||1);
-    const tm    = {};
-    tramos.forEach(t=>{ tm[t]=monto?ed.filter(r=>r.tramo===t).reduce((s,r)=>s+r.monto,0)/monto:0; });
-    return { emp, monto, tasa, ppv, ops:ed.length, tm, color:EMP_PALETTE[i%EMP_PALETTE.length] };
+
+  const stats = allEmps.map((emp, i) => {
+    const ed = data.filter(r=>r.empresa===emp);
+    const mo = ed.reduce((s,r)=>s+r.monto,0);
+    const ta = ed.reduce((s,r)=>s+r.tasa*r.monto,0)/(mo||1);
+    const pd = ed.filter(r=>!isNaN(r.ppv)&&r.ppv>0);
+    const pp = pd.reduce((s,r)=>s+r.ppv*r.monto,0)/(pd.reduce((s,r)=>s+r.monto,0)||1);
+    const tm = {};
+    tramos.forEach(t=>{tm[t]=mo?ed.filter(r=>r.tramo===t).reduce((s,r)=>s+r.monto,0)/mo:0;});
+    const color = i === 0 ? EMP_MAIN_COLOR : EMP_PALETTE[(i) % EMP_PALETTE.length];
+    const label = i === 0 ? `★ ${emp}` : emp;
+    return { emp, label, mo, ta, pp, ops:ed.length, tm, color };
   });
-  document.getElementById('empCmpBody').innerHTML = rows.map(r=>`<tr>
-    <td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};margin-right:6px"></span>${r.emp}</td>
-    <td>${fmtM(r.monto)}</td><td>${r.tasa.toFixed(2)}%</td>
-    <td>${isFinite(r.ppv)&&r.ppv>0?Math.round(r.ppv)+' d':'—'}</td><td>${r.ops}</td>
+
+  document.getElementById('empCmpBody').innerHTML = stats.map(r=>`<tr>
+    <td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${r.color};margin-right:6px"></span>${r.label}</td>
+    <td>${fmtM(r.mo)}</td><td>${r.ta.toFixed(2)}%</td>
+    <td>${isFinite(r.pp)&&r.pp>0?Math.round(r.pp)+' d':'—'}</td><td>${r.ops}</td>
     ${tramos.map(t=>`<td>${(r.tm[t]*100).toFixed(1)}%</td>`).join('')}
   </tr>`).join('');
-  const tot = rows.reduce((s,r)=>s+r.monto,0);
-  const totT= rows.reduce((s,r)=>s+r.tasa*r.monto,0)/(tot||1);
-  const totP= rows.reduce((s,r)=>s+(isFinite(r.ppv)?r.ppv:0)*r.monto,0)/(tot||1);
-  const totTm={};
-  tramos.forEach(t=>{totTm[t]=rows.reduce((s,r)=>s+r.tm[t]*r.monto,0)/(tot||1);});
+
+  // Promedio ponderado SOLO de las empresas de comparación
+  const cmpStats = stats.slice(1);
+  const tot = cmpStats.reduce((s,r)=>s+r.mo,0);
+  const totT = cmpStats.reduce((s,r)=>s+r.ta*r.mo,0)/(tot||1);
+  const totP = cmpStats.reduce((s,r)=>s+(isFinite(r.pp)?r.pp:0)*r.mo,0)/(tot||1);
+  const totTm = {};
+  tramos.forEach(t=>{totTm[t]=cmpStats.reduce((s,r)=>s+r.tm[t]*r.mo,0)/(tot||1);});
   document.getElementById('empCmpFoot').innerHTML = `<tr>
-    <td>Promedio pond.</td><td>${fmtM(tot)}</td><td>${totT.toFixed(2)}%</td>
-    <td>${isFinite(totP)&&totP>0?Math.round(totP)+' d':'—'}</td><td>${rows.reduce((s,r)=>s+r.ops,0)}</td>
-    ${tramos.map(t=>`<td>${(totTm[t]*100).toFixed(1)}%</td>`).join('')}
+    <td>Prom. pond. comparación</td><td>${fmtM(tot)}</td><td>${tot>0?totT.toFixed(2)+'%':'—'}</td>
+    <td>${tot>0&&isFinite(totP)&&totP>0?Math.round(totP)+' d':'—'}</td><td>${cmpStats.reduce((s,r)=>s+r.ops,0)}</td>
+    ${tramos.map(t=>`<td>${tot>0?(totTm[t]*100).toFixed(1)+'%':'—'}</td>`).join('')}
   </tr>`;
 }
 
+// ── Pies: moneda e instrumento (empresa principal) ──────────────────
+function renderEmpPies(data) {
+  // Por moneda
+  const byMon = {};
+  data.forEach(r=>{ byMon[r.moneda]=(byMon[r.moneda]||0)+r.monto; });
+  const monLabels = Object.keys(byMon);
+  const monData   = monLabels.map(k=>byMon[k]);
+  const monColors = monLabels.map((_,i)=>EMP_PALETTE[i%EMP_PALETTE.length]);
+
+  if (empChartPieMon) empChartPieMon.destroy();
+  empChartPieMon = makePie('empCPieMon',
+    monLabels.map(k=>MON_LABELS[k]||k), monData, monColors);
+
+  // Por instrumento
+  const byInst = {};
+  data.forEach(r=>{ const t=r.tipo||'Otro'; byInst[t]=(byInst[t]||0)+r.monto; });
+  const instLabels = Object.keys(byInst).sort((a,b)=>byInst[b]-byInst[a]);
+  const instData   = instLabels.map(k=>byInst[k]);
+  const instColors = instLabels.map((_,i)=>EMP_PALETTE[i%EMP_PALETTE.length]);
+
+  if (empChartPieInst) empChartPieInst.destroy();
+  empChartPieInst = makePie('empCPieInst', instLabels, instData, instColors);
+}
+
+// ── Resumen por instrumento (reutiliza lógica de Histórico) ─────────
+function renderEmpInstr(data) {
+  const rows = empInstrFilter === 'ALL' ? data : data.filter(r => instrMatch(r.tipo));
+  const m = {};
+  rows.forEach(r => {
+    const seg = r.segmento || 'Sin segmento';
+    const mon = r.moneda   || 'Sin moneda';
+    const key = seg + '‖' + mon;
+    if (!m[key]) m[key] = { seg, mon, sM: 0, sTM: 0, tramos: {} };
+    m[key].sM  += r.monto;
+    m[key].sTM += r.tasa * r.monto;
+    m[key].tramos[r.tramo||'—'] = (m[key].tramos[r.tramo||'—']||0) + r.monto;
+  });
+  const bySeg = {};
+  Object.values(m).forEach(v => { if (!bySeg[v.seg]) bySeg[v.seg]=[]; bySeg[v.seg].push(v); });
+  const segsFound = Object.keys(bySeg);
+  const segs = SEG_ORDER_INSTR.filter(s=>segsFound.includes(s))
+               .concat(segsFound.filter(s=>!SEG_ORDER_INSTR.includes(s)));
+  let html = '';
+  segs.forEach(seg => {
+    const subrows = bySeg[seg].sort((a,b)=>b.sM-a.sM);
+    const segTotal = subrows.reduce((s,r)=>s+r.sM,0);
+    html += `<tr class="seg-hdr"><td colspan="6">${segLbl(seg)}<span>${fmtM(segTotal)}</span></td></tr>`;
+    subrows.forEach(row => {
+      const tna = row.sM>0?row.sTM/row.sM:0;
+      const tem = tna/12;
+      const tea = (Math.pow(1+tna/100/12,12)-1)*100;
+      const majorTramo = Object.entries(row.tramos).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
+      html += `<tr>
+        <td style="padding-left:22px;color:var(--muted);font-size:12px">${MON_LABELS[row.mon]||row.mon}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtN(row.sM)}</td>
+        <td style="text-align:center;font-weight:600">${majorTramo} días</td>
+        <td style="text-align:right;color:#E32D91;font-weight:700">${tea.toFixed(2)}%</td>
+        <td style="text-align:right;font-weight:600">${tem.toFixed(2)}%</td>
+        <td style="text-align:right;font-weight:700;color:var(--pri)">${tna.toFixed(2)}%</td>
+      </tr>`;
+    });
+  });
+  if (!html) html='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Sin datos</td></tr>';
+  document.getElementById('empTInstr').innerHTML = html;
+}
+
+// ── Vencimientos por mes ────────────────────────────────────────────
 function renderEmpVencimientos(data) {
   const mesProj = document.getElementById('empMesProj').value;
+  const allEmps = [empMain, ...empCmpList];
   const byMes = {};
   data.forEach(r => {
     if (isNaN(r.ppv)||r.ppv<=0) return;
@@ -1687,21 +1855,26 @@ function renderEmpVencimientos(data) {
   const range=[];
   let cur=new Date(allMeses[0]+'-01T00:00:00');
   const end=new Date(mesMax+'-01T00:00:00');
-  while(cur<=end){ range.push(cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0')); cur=new Date(cur.getFullYear(),cur.getMonth()+1,1); }
-  const datasets=empSelected.map((emp,i)=>({
-    label:emp, data:range.map(m=>(byMes[m]?.[emp]||0)/1e6),
-    backgroundColor:EMP_PALETTE[i%EMP_PALETTE.length]+'cc',
-    borderColor:EMP_PALETTE[i%EMP_PALETTE.length], borderWidth:1,
+  while(cur<=end){
+    range.push(cur.getFullYear()+'-'+String(cur.getMonth()+1).padStart(2,'0'));
+    cur=new Date(cur.getFullYear(),cur.getMonth()+1,1);
+  }
+  const datasets = allEmps.map((emp,i)=>({
+    label: emp,
+    data: range.map(m=>(byMes[m]?.[emp]||0)/1e6),
+    backgroundColor: (i===0 ? EMP_MAIN_COLOR : EMP_PALETTE[i%EMP_PALETTE.length])+'cc',
+    borderColor:      i===0 ? EMP_MAIN_COLOR : EMP_PALETTE[i%EMP_PALETTE.length],
+    borderWidth: 1,
   }));
   if (empChartVenc) empChartVenc.destroy();
-  empChartVenc=new Chart(document.getElementById('empCVenc'),{
+  empChartVenc = new Chart(document.getElementById('empCVenc'),{
     type:'bar', data:{labels:range,datasets},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{position:'top',labels:{boxWidth:10,font:{size:11}}},
         tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(1)}M`}}},
       scales:{
-        x:{stacked:empSelected.length>1,ticks:{font:{size:10},maxRotation:45},grid:{display:false}},
-        y:{stacked:empSelected.length>1,title:{display:true,text:'Monto (millones)',font:{size:11}},
+        x:{stacked:true,ticks:{font:{size:10},maxRotation:45},grid:{display:false}},
+        y:{stacked:true,title:{display:true,text:'Monto (millones)',font:{size:11}},
           ticks:{callback:v=>'$'+v+'M',font:{size:10}},grid:{color:'#f3f4f6'}},
       }}
   });
@@ -1710,46 +1883,33 @@ function renderEmpVencimientos(data) {
     : 'Monto proyectado (fecha emisión + PPV días)';
 }
 
+// ── Distribución por tramo (empresa principal) ──────────────────────
 function renderEmpTramos(data) {
   const wrap=document.getElementById('empTramoWrap');
-  wrap.innerHTML='';
-  if (empSelected.length===1) {
-    const total=data.reduce((s,r)=>s+r.monto,0);
-    const tm={};
-    data.forEach(r=>{tm[r.tramo]=(tm[r.tramo]||0)+r.monto;});
-    wrap.innerHTML='<div class="tramo-bar-wrap">'+
-      Object.entries(tm).sort((a,b)=>b[1]-a[1]).map(([t,m])=>{
-        const pct=total?(m/total*100):0;
-        return `<div class="tramo-bar-row">
-          <span class="tramo-bar-lbl">${t} d</span>
-          <div class="tramo-bar-bg"><div class="tramo-bar-fill" style="width:${pct.toFixed(1)}%;background:${TRAMO_COLORS[t]||'var(--pri)'}"></div></div>
-          <span class="tramo-bar-pct">${pct.toFixed(1)}%</span></div>`;
-      }).join('')+'</div>';
-  } else {
-    const tramosAll=[...new Set(data.map(r=>r.tramo).filter(Boolean))].sort();
-    wrap.innerHTML=empSelected.map((emp,i)=>{
-      const ed=data.filter(r=>r.empresa===emp);
-      const total=ed.reduce((s,r)=>s+r.monto,0);
-      return `<div style="margin-bottom:14px">
-        <div style="font-size:11px;font-weight:700;color:${EMP_PALETTE[i%EMP_PALETTE.length]};margin-bottom:5px">${emp}</div>
-        <div class="tramo-bar-wrap">`+
-        tramosAll.map(t=>{const m=ed.filter(r=>r.tramo===t).reduce((s,r)=>s+r.monto,0);const pct=total?m/total*100:0;
-          return `<div class="tramo-bar-row"><span class="tramo-bar-lbl">${t} d</span>
-            <div class="tramo-bar-bg"><div class="tramo-bar-fill" style="width:${pct.toFixed(1)}%;background:${EMP_PALETTE[i%EMP_PALETTE.length]}"></div></div>
-            <span class="tramo-bar-pct">${pct.toFixed(1)}%</span></div>`;
-        }).join('')+'</div></div>';
-    }).join('');
-  }
+  const total=data.reduce((s,r)=>s+r.monto,0);
+  const tm={};
+  data.forEach(r=>{tm[r.tramo]=(tm[r.tramo]||0)+r.monto;});
+  wrap.innerHTML='<div class="tramo-bar-wrap">'+
+    Object.entries(tm).sort((a,b)=>b[1]-a[1]).map(([t,mo])=>{
+      const pct=total?(mo/total*100):0;
+      return `<div class="tramo-bar-row">
+        <span class="tramo-bar-lbl">${t} d</span>
+        <div class="tramo-bar-bg"><div class="tramo-bar-fill" style="width:${pct.toFixed(1)}%;background:${TRAMO_COLORS[t]||'var(--pri)'}"></div></div>
+        <span class="tramo-bar-pct">${pct.toFixed(1)}%</span></div>`;
+    }).join('')+'</div>';
 }
 
+// ── Tabla detalle operaciones ────────────────────────────────────────
 function renderEmpOpTable() {
   const q=(document.getElementById('empOpSearch').value||'').toLowerCase();
+  const allEmps=[empMain,...empCmpList];
   const rows=empOpRows.filter(r=>!q||r.empresa.toLowerCase().includes(q)||r.tipo.toLowerCase().includes(q)||r.moneda.toLowerCase().includes(q)||(r.tramo||'').toLowerCase().includes(q)).sort((a,b)=>b.monto-a.monto);
   document.getElementById('empOpCount').textContent=`${rows.length} operaciones`;
   document.getElementById('empOpBody').innerHTML=rows.slice(0,500).map(r=>{
     let vtoStr='—';
     if (!isNaN(r.ppv)&&r.ppv>0){const v=new Date(r.date+'T00:00:00');v.setDate(v.getDate()+Math.round(r.ppv));vtoStr=v.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});}
-    const color=EMP_PALETTE[empSelected.indexOf(r.empresa)%EMP_PALETTE.length];
+    const idx=allEmps.indexOf(r.empresa);
+    const color=idx===0?EMP_MAIN_COLOR:EMP_PALETTE[idx%EMP_PALETTE.length];
     return `<tr>
       <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>${r.empresa}</td>
       <td>${r.date.split('-').reverse().join('/')}</td><td>${r.tipo}</td><td>${r.moneda}</td>
