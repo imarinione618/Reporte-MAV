@@ -128,8 +128,9 @@ function parseCSV(text) {
     monto:    idx['MONTO']            ?? 18,
     empresa:  idx['NOMBRE RESPONSABLE'] ?? 24,
     categoria:idx['CATEGORIA']        ?? 26,
-    tramo:    idx['TRAMO']            ?? 27,
-    ppv:      idx['PPV']              ?? -1,
+    tramo:     idx['TRAMO']            ?? 27,
+    comprador: idx['COMPRADOR']       ?? 28,
+    ppv:       idx['PPV']             ?? -1,
   };
 
   const result = [];
@@ -160,6 +161,7 @@ function parseCSV(text) {
       empresa:   (r[C.empresa]    || '').replace(/"/g,'').trim(),
       categoria: (r[C.categoria]  || '').replace(/"/g,'').trim(),
       tramo:     (r[C.tramo]      || '').replace(/"/g,'').trim(),
+      comprador: (r[C.comprador]  || '').replace(/"/g,'').trim() || 'sin datos',
       ppv:       C.ppv >= 0 ? parseArg(r[C.ppv]) : NaN,
     });
   }
@@ -1524,8 +1526,9 @@ function rtUpdBubble(d) {
 let empMain      = null;   // empresa principal (string o null)
 let empCmpList   = [];     // empresas de comparación (array)
 let empAllNames  = [];
-let empChartVenc   = null;
-let empChartMontos = null;
+let empChartVenc         = null;
+let empChartMontos       = null;
+let empChartCompradorBar = null;
 let empChartPieMon  = null;
 let empChartPieInst = null;
 let empChartPieTasa = null;
@@ -1724,6 +1727,7 @@ function renderEmp() {
   renderEmpPies(mainData);
   renderEmpVencimientos(data);
   renderEmpMontos(data);
+  renderEmpComprador(data);
   renderEmpTramos(mainData);
   empOpRows = data;
   renderEmpOpTable();
@@ -2020,6 +2024,76 @@ function renderEmpMontos(data) {
         y: { stacked: true, grid: { color: '#f3f4f6' },
              ticks: { callback: v => v.toFixed(0) + ' MM', font: { size: 10 } },
              title: { display: true, text: 'Miles de millones ($)', font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+// ── Distribución por Comprador ──────────────────────────────────────
+const COMP_PIE_COLORS = ['#1A49C8','#E32D91','#7B1FAE','#22c55e','#f59e0b','#06b6d4','#ef4444','#84cc16','#f97316','#8b5cf6','#0ea5e9','#d946ef','#B2B2B2'];
+
+function renderEmpComprador(data) {
+  // Agrega por comprador (total de todas las empresas seleccionadas)
+  const totByComp = {};
+  data.forEach(r => {
+    const c = r.comprador || 'sin datos';
+    totByComp[c] = (totByComp[c] || 0) + r.monto;
+  });
+  const sorted = Object.entries(totByComp).sort((a, b) => b[1] - a[1]);
+  if (!sorted.length) return;
+
+  // ── Pie: top 10 + Otros ──────────────────────────────────────────
+  const TOP_PIE = 10;
+  const topPie  = sorted.slice(0, TOP_PIE);
+  const otrosV  = sorted.slice(TOP_PIE).reduce((s, [, v]) => s + v, 0);
+  if (otrosV > 0) topPie.push(['Otros', otrosV]);
+  makePie(
+    'empCCompradorPie',
+    topPie.map(([k]) => k),
+    topPie.map(([, v]) => +(v / 1e9).toFixed(3)),
+    topPie.map((_, i) => COMP_PIE_COLORS[i] || '#94a3b8')
+  );
+
+  // ── Bar horizontal: top 15, apilado por empresa ──────────────────
+  const TOP_BAR = 15;
+  const top15   = sorted.slice(0, TOP_BAR).map(([k]) => k);
+  const allEmps = [empMain, ...empCmpList];
+
+  const byEmpComp = {};
+  data.forEach(r => {
+    if (!top15.includes(r.comprador)) return;
+    if (!byEmpComp[r.empresa]) byEmpComp[r.empresa] = {};
+    byEmpComp[r.empresa][r.comprador] = (byEmpComp[r.empresa][r.comprador] || 0) + r.monto;
+  });
+
+  const barDatasets = allEmps.map((emp, i) => {
+    const color = i === 0 ? EMP_MAIN_COLOR : EMP_PALETTE[i % EMP_PALETTE.length];
+    return {
+      label: emp,
+      data: top15.map(comp => +((byEmpComp[emp]?.[comp] || 0) / 1e9).toFixed(3)),
+      backgroundColor: color + 'cc',
+      borderColor: color,
+      borderWidth: 1,
+      stack: 'comp',
+    };
+  });
+
+  if (empChartCompradorBar) empChartCompradorBar.destroy();
+  empChartCompradorBar = new Chart(document.getElementById('empCCompradorBar'), {
+    type: 'bar',
+    data: { labels: top15, datasets: barDatasets },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.x.toFixed(1)} MM` } }
+      },
+      scales: {
+        x: { stacked: true, grid: { color: '#f3f4f6' },
+             ticks: { callback: v => v.toFixed(0) + ' MM', font: { size: 10 } },
+             title: { display: true, text: 'Miles de millones ($)', font: { size: 11 } } },
+        y: { stacked: true, ticks: { font: { size: 10 } }, grid: { display: false } }
       }
     }
   });
