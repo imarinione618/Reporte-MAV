@@ -1524,7 +1524,8 @@ function rtUpdBubble(d) {
 let empMain      = null;   // empresa principal (string o null)
 let empCmpList   = [];     // empresas de comparación (array)
 let empAllNames  = [];
-let empChartVenc = null;
+let empChartVenc   = null;
+let empChartMontos = null;
 let empChartPieMon  = null;
 let empChartPieInst = null;
 let empChartPieTasa = null;
@@ -1723,6 +1724,7 @@ function renderEmp() {
   renderEmpPies(mainData);
   renderEmpInstr(data);
   renderEmpVencimientos(data);
+  renderEmpMontos(data);
   renderEmpTramos(mainData);
   empOpRows = data;
   renderEmpOpTable();
@@ -1961,6 +1963,40 @@ function renderEmpVencimientos(data) {
   const total = Object.values(byMes).flatMap(Object.values).reduce((a,b)=>a+b,0);
   document.getElementById('empVncSub').textContent =
     `Vencimientos proyectados: ${fmtM(total)} · hasta ${fmtMesLabel(futureMeses[futureMeses.length-1])}`;
+}
+
+// ── Montos emitidos por fecha (pestaña Empresas) ────────────────────
+function renderEmpMontos(data) {
+  const m = {};
+  data.forEach(r => { if (r.date) m[r.date] = (m[r.date] || 0) + r.monto; });
+  const sorted = Object.entries(m).sort((a, b) => a[0].localeCompare(b[0]));
+  const total = sorted.reduce((s, [, v]) => s + v, 0);
+  const subEl = document.getElementById('empMontSub');
+  if (subEl) subEl.textContent = 'Total: ' + fmtM(total);
+  if (empChartMontos) { empChartMontos.destroy(); empChartMontos = null; }
+  if (!sorted.length) return;
+  const labels = sorted.map(([dateStr]) => fmtDate(dateStr));
+  empChartMontos = new Chart(document.getElementById('empCMontos'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: 'Monto diario', data: sorted.map(([, v]) => +(v / 1e9).toFixed(3)),
+                   backgroundColor: 'rgba(26,73,200,.45)', borderColor: '#1A49C8',
+                   borderWidth: 1, borderRadius: 3 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false },
+                 tooltip: { callbacks: { label: ctx => ' ' + ctx.raw.toFixed(1) + ' MM' } } },
+      scales: {
+        x: { type: 'category', grid: { display: false },
+             ticks: { font: { size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } },
+        y: { grid: { color: '#f3f4f6' },
+             ticks: { callback: v => v.toFixed(0) + ' MM', font: { size: 10 } },
+             title: { display: true, text: 'Miles de millones ($)', font: { size: 11 } } }
+      }
+    }
+  });
 }
 
 // ── Distribución por tramo (empresa principal) ──────────────────────
