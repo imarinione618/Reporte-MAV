@@ -1849,7 +1849,7 @@ function renderEmpPies(data) {
 // ── Resumen por instrumento (agrupado en Garantizado Total / No Garantizado Total) ──
 function renderEmpInstr(data) {
   // Clasifica cada fila en uno de los dos grupos virtuales
-  const isGar  = r => { const s=(r.segmento||'').toLowerCase(); return s.includes('garantizado') && !s.includes('no garantizado'); };
+  const isGar  = r => { const s=(r.segmento||'').toLowerCase(); return s.includes('avalado') || (s.includes('garantizado') && !s.includes('no garantizado')); };
   const isNoGar= r => (r.segmento||'').toLowerCase().includes('no garantizado');
 
   const GROUPS = [
