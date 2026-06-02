@@ -1722,7 +1722,6 @@ function renderEmp() {
   renderEmpKpis(mainData, cmpData);
   renderEmpComparativo(data);
   renderEmpPies(mainData);
-  renderEmpInstr(data);
   renderEmpVencimientos(data);
   renderEmpMontos(data);
   renderEmpTramos(mainData);
