@@ -1846,37 +1846,45 @@ function renderEmpPies(data) {
   empChartPieInst = makePie('empCPieInst', instLabels, instData, instColors);
 }
 
-// ── Resumen por instrumento ─────────────────────────────────────────
+// ── Resumen por instrumento (agrupado en Garantizado Total / No Garantizado Total) ──
 function renderEmpInstr(data) {
-  // El filtro de instrumento ya fue aplicado en renderEmp(); data ya está filtrado.
-  const rows = data;
-  const m = {};
-  rows.forEach(r => {
-    const seg = r.segmento || 'Sin segmento';
-    const mon = r.moneda   || 'Sin moneda';
-    const key = seg + '‖' + mon;
-    if (!m[key]) m[key] = { seg, mon, sM: 0, sTM: 0, tramos: {} };
-    m[key].sM  += r.monto;
-    m[key].sTM += r.tasa * r.monto;
-    m[key].tramos[r.tramo||'—'] = (m[key].tramos[r.tramo||'—']||0) + r.monto;
+  // Clasifica cada fila en uno de los dos grupos virtuales
+  const isGar  = r => { const s=(r.segmento||'').toLowerCase(); return s.includes('garantizado') && !s.includes('no garantizado'); };
+  const isNoGar= r => (r.segmento||'').toLowerCase().includes('no garantizado');
+
+  const GROUPS = [
+    { key:'_G_TOTAL',  label:'Garantizado Total',    match: isGar   },
+    { key:'_NG_TOTAL', label:'No Garantizado Total',  match: isNoGar },
+  ];
+
+  // Agrega por grupo+moneda
+  const byGroup = {};
+  GROUPS.forEach(g => { byGroup[g.key] = {}; });
+
+  data.forEach(r => {
+    const grp = GROUPS.find(g => g.match(r));
+    if (!grp) return;
+    const mon = r.moneda || 'Sin moneda';
+    if (!byGroup[grp.key][mon]) byGroup[grp.key][mon] = { sM:0, sTM:0, tramos:{} };
+    byGroup[grp.key][mon].sM  += r.monto;
+    byGroup[grp.key][mon].sTM += r.tasa * r.monto;
+    const t = r.tramo || '—';
+    byGroup[grp.key][mon].tramos[t] = (byGroup[grp.key][mon].tramos[t] || 0) + r.monto;
   });
-  const bySeg = {};
-  Object.values(m).forEach(v => { if (!bySeg[v.seg]) bySeg[v.seg]=[]; bySeg[v.seg].push(v); });
-  const segsFound = Object.keys(bySeg);
-  const segs = SEG_ORDER_INSTR.filter(s=>segsFound.includes(s))
-               .concat(segsFound.filter(s=>!SEG_ORDER_INSTR.includes(s)));
+
   let html = '';
-  segs.forEach(seg => {
-    const subrows = bySeg[seg].sort((a,b)=>b.sM-a.sM);
-    const segTotal = subrows.reduce((s,r)=>s+r.sM,0);
-    html += `<tr class="seg-hdr"><td colspan="6">${segLbl(seg)}<span>${fmtM(segTotal)}</span></td></tr>`;
-    subrows.forEach(row => {
-      const tna = row.sM>0?row.sTM/row.sM:0;
-      const tem = tna/12;
-      const tea = (Math.pow(1+tna/100/12,12)-1)*100;
-      const majorTramo = Object.entries(row.tramos).sort((a,b)=>b[1]-a[1])[0]?.[0]||'—';
+  GROUPS.forEach(g => {
+    const monRows = Object.entries(byGroup[g.key]);
+    if (!monRows.length) return;
+    const groupTotal = monRows.reduce((s, [, v]) => s + v.sM, 0);
+    html += `<tr class="seg-hdr"><td colspan="6">${g.label}<span>${fmtM(groupTotal)}</span></td></tr>`;
+    monRows.sort((a, b) => b[1].sM - a[1].sM).forEach(([mon, row]) => {
+      const tna = row.sM > 0 ? row.sTM / row.sM : 0;
+      const tem = tna / 12;
+      const tea = (Math.pow(1 + tna / 100 / 12, 12) - 1) * 100;
+      const majorTramo = Object.entries(row.tramos).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
       html += `<tr>
-        <td style="padding-left:22px;color:var(--muted);font-size:12px">${MON_LABELS[row.mon]||row.mon}</td>
+        <td style="padding-left:22px;color:var(--muted);font-size:12px">${MON_LABELS[mon]||mon}</td>
         <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtN(row.sM)}</td>
         <td style="text-align:center;font-weight:600">${majorTramo} días</td>
         <td style="text-align:right;color:#E32D91;font-weight:700">${tea.toFixed(2)}%</td>
@@ -1885,7 +1893,7 @@ function renderEmpInstr(data) {
       </tr>`;
     });
   });
-  if (!html) html='<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Sin datos</td></tr>';
+  if (!html) html = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--muted)">Sin datos</td></tr>';
   document.getElementById('empTInstr').innerHTML = html;
 }
 
@@ -1967,31 +1975,50 @@ function renderEmpVencimientos(data) {
 
 // ── Montos emitidos por fecha (pestaña Empresas) ────────────────────
 function renderEmpMontos(data) {
-  const m = {};
-  data.forEach(r => { if (r.date) m[r.date] = (m[r.date] || 0) + r.monto; });
-  const sorted = Object.entries(m).sort((a, b) => a[0].localeCompare(b[0]));
-  const total = sorted.reduce((s, [, v]) => s + v, 0);
+  const allEmps = [empMain, ...empCmpList];
+
+  // Acumular monto por fecha × empresa
+  const byDate = {};
+  data.forEach(r => {
+    if (!r.date || !r.empresa) return;
+    if (!byDate[r.date]) byDate[r.date] = {};
+    byDate[r.date][r.empresa] = (byDate[r.date][r.empresa] || 0) + r.monto;
+  });
+
+  const dates = Object.keys(byDate).sort();
   const subEl = document.getElementById('empMontSub');
-  if (subEl) subEl.textContent = 'Total: ' + fmtM(total);
   if (empChartMontos) { empChartMontos.destroy(); empChartMontos = null; }
-  if (!sorted.length) return;
-  const labels = sorted.map(([dateStr]) => fmtDate(dateStr));
+  if (!dates.length) { if (subEl) subEl.textContent = 'Sin datos'; return; }
+
+  const total = data.reduce((s, r) => s + r.monto, 0);
+  if (subEl) subEl.textContent = 'Total: ' + fmtM(total);
+
+  const labels = dates.map(fmtDate);
+  const datasets = allEmps.map((emp, i) => {
+    const baseColor = i === 0 ? EMP_MAIN_COLOR : EMP_PALETTE[i % EMP_PALETTE.length];
+    return {
+      label: emp,
+      data: dates.map(d => +((byDate[d]?.[emp] || 0) / 1e9).toFixed(3)),
+      backgroundColor: baseColor + 'cc',
+      borderColor: baseColor,
+      borderWidth: 1,
+      stack: 'montos',
+    };
+  });
+
   empChartMontos = new Chart(document.getElementById('empCMontos'), {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [{ label: 'Monto diario', data: sorted.map(([, v]) => +(v / 1e9).toFixed(3)),
-                   backgroundColor: 'rgba(26,73,200,.45)', borderColor: '#1A49C8',
-                   borderWidth: 1, borderRadius: 3 }]
-    },
+    data: { labels, datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false },
-                 tooltip: { callbacks: { label: ctx => ' ' + ctx.raw.toFixed(1) + ' MM' } } },
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(1)} MM` } }
+      },
       scales: {
-        x: { type: 'category', grid: { display: false },
+        x: { stacked: true, type: 'category', grid: { display: false },
              ticks: { font: { size: 10 }, maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } },
-        y: { grid: { color: '#f3f4f6' },
+        y: { stacked: true, grid: { color: '#f3f4f6' },
              ticks: { callback: v => v.toFixed(0) + ' MM', font: { size: 10 } },
              title: { display: true, text: 'Miles de millones ($)', font: { size: 11 } } }
       }
