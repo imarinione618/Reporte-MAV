@@ -1537,8 +1537,8 @@ let empInstrFilter = 'ALL';
 let empMonedas   = [];     // [] = todas; igual que F.monedas en Histórico
 
 const EMP_PALETTE = [
-  '#1A49C8','#E32D91','#7B1FAE','#22c55e','#f59e0b',
-  '#06b6d4','#ef4444','#84cc16','#8b5cf6','#f97316',
+  '#E32D91','#7B1FAE','#3B6FE8','#C01070','#6B93F0',
+  '#F06AB8','#0D2E7A','#8B0050','#9BB8F7','#4B2080',
 ];
 const EMP_MAIN_COLOR = '#1A49C8';
 
@@ -2030,7 +2030,7 @@ function renderEmpMontos(data) {
 }
 
 // ── Distribución por Comprador ──────────────────────────────────────
-const COMP_PIE_COLORS = ['#1A49C8','#E32D91','#3B6FE8','#C01070','#6B93F0','#F06AB8','#0D2E7A','#8B0050','#B2B2B2','#6B7280','#4B5563','#191919','#9BB8F7'];
+const COMP_PIE_COLORS = ['#1A49C8','#E32D91','#3B6FE8','#C01070','#6B93F0','#F06AB8','#0D2E7A','#8B0050','#B2B2B2','#6B7280','#4B5563','#191919','#9BB8F7','#7B1FAE','#4B2080'];
 
 function renderEmpComprador(data) {
   // Agrega por comprador (total de todas las empresas seleccionadas)
