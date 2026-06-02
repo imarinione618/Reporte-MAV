@@ -623,18 +623,36 @@
         </div>
       </div>
 
-      <!-- Distribución por Comprador -->
+      <!-- Distribución por Agente Vendedor -->
       <div class="row r2">
         <div class="card">
           <div class="card-hdr">
-            <span class="card-ttl">Distribución por Comprador</span>
+            <span class="card-ttl">Distribución por Agente Vendedor</span>
+            <span class="card-sub">% sobre monto total · top 10</span>
+          </div>
+          <div class="pie-wrap" style="height:380px"><canvas id="empCVendedorPie" style="max-height:380px"></canvas></div>
+        </div>
+        <div class="card" style="display:flex;flex-direction:column">
+          <div class="card-hdr">
+            <span class="card-ttl">Ranking por Agente Vendedor</span>
+            <span class="card-sub">Top 15 por monto · apilado por empresa</span>
+          </div>
+          <div style="position:relative;flex:1;min-height:380px"><canvas id="empCVendedorBar"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Distribución por Agente Comprador -->
+      <div class="row r2">
+        <div class="card">
+          <div class="card-hdr">
+            <span class="card-ttl">Distribución por Agente Comprador</span>
             <span class="card-sub">% sobre monto total · top 10</span>
           </div>
           <div class="pie-wrap" style="height:380px"><canvas id="empCCompradorPie" style="max-height:380px"></canvas></div>
         </div>
         <div class="card" style="display:flex;flex-direction:column">
           <div class="card-hdr">
-            <span class="card-ttl">Ranking por Comprador</span>
+            <span class="card-ttl">Ranking por Agente Comprador</span>
             <span class="card-sub">Top 15 por monto · apilado por empresa</span>
           </div>
           <div style="position:relative;flex:1;min-height:380px"><canvas id="empCCompradorBar"></canvas></div>

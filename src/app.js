@@ -130,6 +130,7 @@ function parseCSV(text) {
     categoria:idx['CATEGORIA']        ?? 26,
     tramo:     idx['TRAMO']            ?? 27,
     comprador: idx['COMPRADOR']       ?? 28,
+    vendedor:  idx['VENDEDOR']        ?? 29,
     ppv:       idx['PPV']             ?? -1,
   };
 
@@ -162,6 +163,7 @@ function parseCSV(text) {
       categoria: (r[C.categoria]  || '').replace(/"/g,'').trim(),
       tramo:     (r[C.tramo]      || '').replace(/"/g,'').trim(),
       comprador: (r[C.comprador]  || '').replace(/"/g,'').trim() || 'sin datos',
+      vendedor:  (r[C.vendedor]   || '').replace(/"/g,'').trim() || 'sin datos',
       ppv:       C.ppv >= 0 ? parseArg(r[C.ppv]) : NaN,
     });
   }
@@ -1529,6 +1531,7 @@ let empAllNames  = [];
 let empChartVenc         = null;
 let empChartMontos       = null;
 let empChartCompradorBar = null;
+let empChartVendedorBar  = null;
 let empChartPieMon  = null;
 let empChartPieInst = null;
 let empChartPieTasa = null;
@@ -1727,6 +1730,7 @@ function renderEmp() {
   renderEmpPies(mainData);
   renderEmpVencimientos(data);
   renderEmpMontos(data);
+  renderEmpVendedor(data);
   renderEmpComprador(data);
   renderEmpTramos(mainData);
   empOpRows = data;
@@ -2029,57 +2033,55 @@ function renderEmpMontos(data) {
   });
 }
 
-// ── Distribución por Comprador ──────────────────────────────────────
+// ── Distribución por Agente (genérico: comprador o vendedor) ────────
 const COMP_PIE_COLORS = ['#1A49C8','#E32D91','#3B6FE8','#C01070','#6B93F0','#F06AB8','#0D2E7A','#8B0050','#B2B2B2','#6B7280','#4B5563','#191919','#9BB8F7','#7B1FAE','#4B2080'];
 
-function renderEmpComprador(data) {
-  // Agrega por comprador (total de todas las empresas seleccionadas)
-  const totByComp = {};
+function renderEmpAgente(data, campo, pieId, barId, barChartRef, setter) {
+  const totByAgente = {};
   data.forEach(r => {
-    const c = r.comprador || 'sin datos';
-    totByComp[c] = (totByComp[c] || 0) + r.monto;
+    const c = r[campo] || 'sin datos';
+    totByAgente[c] = (totByAgente[c] || 0) + r.monto;
   });
-  const sorted = Object.entries(totByComp).sort((a, b) => b[1] - a[1]);
+  const sorted = Object.entries(totByAgente).sort((a, b) => b[1] - a[1]);
   if (!sorted.length) return;
 
-  // ── Pie: top 10 + Otros ──────────────────────────────────────────
+  // Pie: top 10 + Otros
   const TOP_PIE = 10;
   const topPie  = sorted.slice(0, TOP_PIE);
   const otrosV  = sorted.slice(TOP_PIE).reduce((s, [, v]) => s + v, 0);
   if (otrosV > 0) topPie.push(['Otros', otrosV]);
   makePie(
-    'empCCompradorPie',
+    pieId,
     topPie.map(([k]) => k),
     topPie.map(([, v]) => +(v / 1e9).toFixed(3)),
     topPie.map((_, i) => COMP_PIE_COLORS[i] || '#94a3b8')
   );
 
-  // ── Bar horizontal: top 15, apilado por empresa ──────────────────
-  const TOP_BAR = 15;
-  const top15   = sorted.slice(0, TOP_BAR).map(([k]) => k);
-  const allEmps = [empMain, ...empCmpList];
-
-  const byEmpComp = {};
+  // Bar horizontal: top 15, apilado por empresa
+  const TOP_BAR  = 15;
+  const top15    = sorted.slice(0, TOP_BAR).map(([k]) => k);
+  const allEmps  = [empMain, ...empCmpList];
+  const byEmpAge = {};
   data.forEach(r => {
-    if (!top15.includes(r.comprador)) return;
-    if (!byEmpComp[r.empresa]) byEmpComp[r.empresa] = {};
-    byEmpComp[r.empresa][r.comprador] = (byEmpComp[r.empresa][r.comprador] || 0) + r.monto;
+    if (!top15.includes(r[campo])) return;
+    if (!byEmpAge[r.empresa]) byEmpAge[r.empresa] = {};
+    byEmpAge[r.empresa][r[campo]] = (byEmpAge[r.empresa][r[campo]] || 0) + r.monto;
   });
 
   const barDatasets = allEmps.map((emp, i) => {
     const color = i === 0 ? EMP_MAIN_COLOR : EMP_PALETTE[i % EMP_PALETTE.length];
     return {
       label: emp,
-      data: top15.map(comp => +((byEmpComp[emp]?.[comp] || 0) / 1e9).toFixed(3)),
+      data: top15.map(ag => +((byEmpAge[emp]?.[ag] || 0) / 1e9).toFixed(3)),
       backgroundColor: color + 'cc',
       borderColor: color,
       borderWidth: 1,
-      stack: 'comp',
+      stack: 'ag',
     };
   });
 
-  if (empChartCompradorBar) empChartCompradorBar.destroy();
-  empChartCompradorBar = new Chart(document.getElementById('empCCompradorBar'), {
+  if (barChartRef) barChartRef.destroy();
+  const chart = new Chart(document.getElementById(barId), {
     type: 'bar',
     data: { labels: top15, datasets: barDatasets },
     options: {
@@ -2097,6 +2099,17 @@ function renderEmpComprador(data) {
       }
     }
   });
+  setter(chart);
+}
+
+function renderEmpVendedor(data) {
+  renderEmpAgente(data, 'vendedor', 'empCVendedorPie', 'empCVendedorBar',
+    empChartVendedorBar, c => { empChartVendedorBar = c; });
+}
+
+function renderEmpComprador(data) {
+  renderEmpAgente(data, 'comprador', 'empCCompradorPie', 'empCCompradorBar',
+    empChartCompradorBar, c => { empChartCompradorBar = c; });
 }
 
 // ── Distribución por tramo (empresa principal) ──────────────────────
