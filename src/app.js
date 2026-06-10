@@ -1734,6 +1734,17 @@ function renderEmp() {
   renderEmpComprador(data);
   renderEmpTramos(mainData);
   empOpRows = data;
+  // Poblar selects de agente con los valores presentes en los datos filtrados
+  ['empOpVendedor','empOpComprador'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const field = id === 'empOpVendedor' ? 'vendedor' : 'comprador';
+    const cur = sel.value;
+    const vals = [...new Set(data.map(r => r[field]).filter(v => v && v !== 'sin datos'))].sort();
+    sel.innerHTML = `<option value="ALL">${id === 'empOpVendedor' ? 'Ag. Vendedor' : 'Ag. Comprador'}</option>`;
+    vals.forEach(v => sel.add(new Option(v, v)));
+    sel.value = vals.includes(cur) ? cur : 'ALL';
+  });
   renderEmpOpTable();
 }
 
@@ -2131,8 +2142,14 @@ function renderEmpTramos(data) {
 // ── Tabla detalle operaciones ────────────────────────────────────────
 function renderEmpOpTable() {
   const q=(document.getElementById('empOpSearch').value||'').toLowerCase();
+  const fVend=(document.getElementById('empOpVendedor')?.value||'ALL');
+  const fComp=(document.getElementById('empOpComprador')?.value||'ALL');
   const allEmps=[empMain,...empCmpList];
-  const rows=empOpRows.filter(r=>!q||r.empresa.toLowerCase().includes(q)||r.tipo.toLowerCase().includes(q)||r.moneda.toLowerCase().includes(q)||(r.tramo||'').toLowerCase().includes(q)).sort((a,b)=>b.monto-a.monto);
+  const rows=empOpRows.filter(r=>
+    (!q||r.empresa.toLowerCase().includes(q)||r.tipo.toLowerCase().includes(q)||r.moneda.toLowerCase().includes(q)||(r.tramo||'').toLowerCase().includes(q))&&
+    (fVend==='ALL'||r.vendedor===fVend)&&
+    (fComp==='ALL'||r.comprador===fComp)
+  ).sort((a,b)=>b.monto-a.monto);
   document.getElementById('empOpCount').textContent=`${rows.length} operaciones`;
   document.getElementById('empOpBody').innerHTML=rows.slice(0,500).map(r=>{
     let vtoStr='—';

@@ -664,7 +664,13 @@
         <div class="card card-full">
           <div class="card-hdr">
             <span class="card-ttl">Detalle de Operaciones</span>
-            <div style="display:flex;gap:8px;align-items:center">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select class="fsel" id="empOpVendedor" onchange="renderEmpOpTable()" style="font-size:12px">
+                <option value="ALL">Ag. Vendedor</option>
+              </select>
+              <select class="fsel" id="empOpComprador" onchange="renderEmpOpTable()" style="font-size:12px">
+                <option value="ALL">Ag. Comprador</option>
+              </select>
               <input type="text" id="empOpSearch" placeholder="Filtrar…"
                 style="padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;outline:none"
                 oninput="renderEmpOpTable()">
