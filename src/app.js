@@ -2145,7 +2145,9 @@ function renderEmpOpTable() {
       <td style="text-align:right">${fmtM(r.monto)}</td><td style="text-align:right">${r.tasa.toFixed(2)}%</td>
       <td style="text-align:center"><span class="bcat" style="background:${(TRAMO_COLORS[r.tramo]||'#6b7280')+'22'};color:${TRAMO_COLORS[r.tramo]||'#6b7280'}">${r.tramo||'—'}</span></td>
       <td style="text-align:right">${isNaN(r.ppv)||r.ppv<=0?'—':Math.round(r.ppv)}</td>
-      <td>${vtoStr}</td></tr>`;
+      <td>${vtoStr}</td>
+      <td>${r.vendedor||'—'}</td>
+      <td>${r.comprador||'—'}</td></tr>`;
   }).join('');
 }
 
