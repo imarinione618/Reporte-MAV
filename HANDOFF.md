@@ -68,6 +68,14 @@ El CSV se parsea en `parseCSV()`. Mapeo de columnas relevantes:
 - Montos en gráficos de "Montos Negociados por Día" están en **miles de millones (MM)** = `v/1e9`.
 - Colores: `EMP_MAIN_COLOR = '#1A49C8'` (principal siempre azul); comparación usa `EMP_PALETTE`.
 
+## 6b. Deploy (GitHub Pages)
+
+- **Método: "Deploy from a branch"** (Pages clásico) → `main` / `/ (root)`. Configurado en Settings → Pages → Source.
+- El sitio es 100% estático (`index.html` en raíz + `assets/` + `src/`), no necesita build.
+- Hay un `.nojekyll` en la raíz para que GitHub sirva los archivos tal cual (sin procesar con Jekyll).
+- **NO usar deploy vía GitHub Actions.** Dio problemas recurrentes ("Deployment failed, try again later" y artefactos `github-pages` duplicados al re-ejecutar jobs). El workflow `.github/workflows/deploy.yml` quedó desactivado (solo `workflow_dispatch`); se puede borrar.
+- Para publicar cambios: commit + push a `main` desde VS Code → GitHub publica solo. Si no ves el cambio, **hard refresh (Ctrl+Shift+R)** por caché.
+
 ## 7. Google Apps Scripts (viven en el Sheet, no en el repo)
 
 - `consolidar_diario.gs` — copia `subastas_modelo` → `subastas_historico` 1x/día (~17:00).
