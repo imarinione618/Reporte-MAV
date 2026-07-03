@@ -2149,7 +2149,10 @@ function renderEmpOpTable() {
     (!q||r.empresa.toLowerCase().includes(q)||r.tipo.toLowerCase().includes(q)||r.moneda.toLowerCase().includes(q)||(r.tramo||'').toLowerCase().includes(q))&&
     (fVend==='ALL'||r.vendedor===fVend)&&
     (fComp==='ALL'||r.comprador===fComp)
-  ).sort((a,b)=>b.monto-a.monto);
+  ).sort((a,b)=>{
+    const d=(b.date||'').localeCompare(a.date||'');
+    return d!==0?d:b.monto-a.monto;
+  });
   document.getElementById('empOpCount').textContent=`${rows.length} operaciones`;
   document.getElementById('empOpBody').innerHTML=rows.slice(0,500).map(r=>{
     let vtoStr='—';
